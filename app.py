@@ -20,7 +20,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("📊 Fund Report Analyzer")
+st.title("📊 Fund Report Analyzer Demo")
 st.write("Upload your fund return files (PDF or Excel) to process them and generate a consolidated report.")
 
 # Fuzzy Column Matching for Excel Files
@@ -133,6 +133,15 @@ def extract_pdf_data(file_content, filename):
         re.IGNORECASE | re.MULTILINE
     )
 
+    # Improved pipe-separated pattern for standard reports
+    standard_report_pattern = re.compile(
+        r'([A-Za-z\s]+?)\s*\|\s*'
+        r'([\+\-]?[\d\.]+)%\s*\|\s*'
+        r'([\d\.\,]+)\s*\|\s*'
+        r'([A-Za-z\s/\-]+)',
+        re.IGNORECASE | re.MULTILINE
+    )
+
     extracted_count = 0
 
     # Try Crest.pdf specific pattern first
@@ -234,6 +243,34 @@ def extract_pdf_data(file_content, filename):
             except Exception as e:
                 st.warning(f"Could not parse general format match: {match.groups()} - Error: {e}")
 
+    # Try the improved standard report pattern for most PDFs
+    if extracted_count == 0:
+        matches = standard_report_pattern.finditer(text)
+        for match in matches:
+            try:
+                fund_name = clean_text_field(match.group(1))
+                
+                # Skip headers and common noise
+                if any(phrase in fund_name.lower() for phrase in [
+                    "fund name", "strategy", "weekly fund", "returns report", 
+                    "------", "data as of", "weekly performance"
+                ]):
+                    continue
+                
+                ret = float(match.group(2)) / 100
+                aum = parse_aum(match.group(3))
+                strategy = clean_text_field(match.group(4))
+                
+                data.append({
+                    "fund_name": fund_name,
+                    "return": ret,
+                    "aum": aum,
+                    "strategy": strategy
+                })
+                extracted_count += 1
+            except Exception as e:
+                st.warning(f"Could not parse standard report match: {match.groups()} - Error: {e}")
+
     # Fallback to pipe-separated pattern if still no data extracted
     if extracted_count == 0:
         matches = pipe_pattern.finditer(text)
@@ -270,13 +307,17 @@ def extract_excel_data(file_content, filename):
     """
     st.write(f"--- Processing Excel: {filename} ---")
     df = pd.read_excel(BytesIO(file_content))
-    df.columns = [col.strip().lower().replace(" ", "_") for col in df.columns]
+    df.columns = [col.strip().lower().replace(" ", "_").replace("(", "").replace(")", "").replace("%", "") for col in df.columns]
     cols = list(df.columns)
+    
+    st.write(f"Found columns: {cols}")
 
     fund_col = match_column(["fund_name", "fund"], cols)
-    ret_col = match_column(["weekly_return_(%)", "weekly_return", "return", "performance"], cols)
-    aum_col = match_column(["aum", "aum_(m_usd)", "net_assets", "assets"], cols)
+    ret_col = match_column(["weekly_return", "weekly_return_", "return", "performance"], cols)
+    aum_col = match_column(["aum_m_usd", "aum", "net_assets", "assets"], cols)
     strat_col = match_column(["strategy", "strat", "approach"], cols)
+
+    st.write(f"Matched columns - Fund: {fund_col}, Return: {ret_col}, AUM: {aum_col}, Strategy: {strat_col}")
 
     if not all([fund_col, ret_col, strat_col]):
         raise ValueError(f"Missing required columns (Fund, Return, Strategy) in {filename}")
@@ -309,7 +350,9 @@ def standardize_strategy_names(df):
         'Multi-Strategy': 'Multi-Strategy',
         'Quant': 'Quantitative',
         'Vol': 'Volatility',
-        'Commodity': 'Commodities'
+        'Vol Arb': 'Volatility Arbitrage',
+        'Commodity': 'Commodities',
+        'Commodity Trading': 'Commodities'
     }).str.strip() # Remove any leading/trailing whitespace after standardization
     return df
 
@@ -459,7 +502,7 @@ if uploaded_files:
                 plt.close()
 
         # Summary Statistics
-        st.subheader("📈 Summary Statistics")
+        st.subheader("Summary Statistics")
         
         col1, col2, col3 = st.columns(3)
         
@@ -486,7 +529,7 @@ if uploaded_files:
 
         # Net Return Summary
         if "net_return_usd" in combined_df.columns and not combined_df["net_return_usd"].isnull().all():
-            st.subheader("💰 Net Return Summary (USD Millions)")
+            st.subheader("Net Return Summary (USD Millions)")
             
             col1, col2 = st.columns(2)
             
