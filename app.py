@@ -15,12 +15,12 @@ import base64
 
 # Page configuration
 st.set_page_config(
-    page_title="Fund Report Analyzer",
+    page_title="Fund Report Analysis Dashboard",
     page_icon="📊",
     layout="wide"
 )
 
-st.title("📊 Fund Report Analyzer")
+st.title("📊 Fund Report Analysis Dashboard")
 st.write("Upload your fund return files (PDF or Excel) to process them and generate a consolidated report.")
 
 # Fuzzy Column Matching for Excel Files
@@ -372,7 +372,7 @@ if uploaded_files:
         if "aum" in combined_df.columns and "return" in combined_df.columns:
             combined_df["net_return_usd"] = combined_df["return"] * combined_df["aum"]
 
-        st.subheader("📋 Combined Fund Data")
+        st.subheader("Combined Fund Data")
         st.dataframe(combined_df, use_container_width=True)
 
         st.subheader("📊 Analysis & Visualizations")
@@ -459,7 +459,7 @@ if uploaded_files:
                 plt.close()
 
         # Summary Statistics
-        st.subheader("📈 Summary Statistics")
+        st.subheader("📈 Summary & Statistics")
         
         col1, col2, col3 = st.columns(3)
         
@@ -475,7 +475,7 @@ if uploaded_files:
                 st.metric("Total AUM", f"${total_aum:,.0f}M")
 
         # Key Insights
-        st.subheader("🔍 Key Insights")
+        st.subheader("Key Insights")
         
         if not combined_df.empty:
             avg_ret_by_strategy = combined_df.groupby("strategy")["return"].mean().sort_values(ascending=False)
@@ -486,7 +486,7 @@ if uploaded_files:
 
         # Net Return Summary
         if "net_return_usd" in combined_df.columns and not combined_df["net_return_usd"].isnull().all():
-            st.subheader("💰 Net Return Summary (USD Millions)")
+            st.subheader("Net Return Summary (USD Millions)")
             
             col1, col2 = st.columns(2)
             
