@@ -639,7 +639,7 @@ def generate_executive_summary_pdf(df: pd.DataFrame) -> bytes:
         total_funds = len(df)
         total_strategies = df["strategy"].nunique() if "strategy" in df.columns else 0
         
-        fig1.text(0.1, 0.90, f'Report Date: {report_date}', fontsize=11, fontweight='bold')
+        # fig1.text(0.1, 0.90, f'Report Date: {report_date}', fontsize=11, fontweight='bold')
         fig1.text(0.5, 0.90, f'Portfolio Overview: {total_funds} Funds across {total_strategies} Strategies', 
                  fontsize=11, fontweight='bold', ha='center')
         
