@@ -10,7 +10,7 @@ import json
 import re
 from io import BytesIO
 from typing import Dict, List, Any, Optional
-import base64
+import numpy as np
 import matplotlib.backends.backend_pdf
 from datetime import datetime, timedelta
 import google.generativeai as genai
@@ -83,22 +83,29 @@ class ContextCache:
         1. Fund Name: Complete fund name (clean and standardized)
         2. Return/Performance: Weekly, monthly, or period returns (convert to decimal, e.g., 5% = 0.05)
         3. AUM (Assets Under Management): In millions USD (convert B to thousands of millions)
-        4. Strategy: Investment strategy category (standardized names)
+        4. Strategy: Investment strategy category (standardized names) - NEVER leave this as null
         5. Additional Metrics: Any other relevant performance metrics
         
         STANDARDIZATION RULES:
-        - Strategy names: Use standard categories like "Long/Short Equity", "Global Macro", "Event-Driven", etc.
-        - AUM: Always in millions USD
-        - Returns: Always as decimals (5% = 0.05)
+        - Strategy names: Use standard categories like "Long/Short Equity", "Global Macro", "Event-Driven", "Quantitative", "Fixed Income Arbitrage", "Credit", "Multi-Strategy"
+        - If strategy is unclear, infer from fund name or context
+        - Common mappings: "L/S Equity" -> "Long/Short Equity", "L/S Eq" -> "Long/Short Equity", "Quant" -> "Quantitative", "Fixed Income Arb" -> "Fixed Income Arbitrage"
+        - AUM: Always in millions USD (convert B to 1000, so 1.1B = 1100)
+        - Returns: Always as decimals (5% = 0.05, 1.45% = 0.0145)
         - Fund names: Clean, remove special characters and formatting artifacts
+        
+        CRITICAL: Every fund MUST have a strategy. If not explicitly stated, infer from:
+        - Fund name (e.g., "Credit" in name -> "Credit" strategy)
+        - Context clues in the document
+        - Default to "Multi-Strategy" only if absolutely no indication
         
         OUTPUT FORMAT: Return data as a JSON array of objects with consistent field names:
         [
             {
                 "fund_name": "Clean Fund Name",
-                "return": 0.025,
-                "aum": 150.5,
-                "strategy": "Long/Short Equity",
+                "return": 0.0145,
+                "aum": 520.0,
+                "strategy": "Quantitative",
                 "additional_metrics": {}
             }
         ]
@@ -106,9 +113,10 @@ class ContextCache:
         QUALITY STANDARDS:
         - Extract ALL funds mentioned in the document
         - Ensure data consistency and accuracy
-        - Handle missing data gracefully (use null for missing values)
+        - Handle missing data gracefully (use null for missing AUM/return, but NEVER for strategy)
         - Identify and skip header/footer information
         - Apply senior analyst judgment for ambiguous cases
+        - Double-check strategy assignments - no fund should have null/empty strategy
         """
 
 # Initialize cache
@@ -193,8 +201,16 @@ def extract_fund_data_with_gemini(model, text_content: str, filename: str, cache
         CONTENT:
         {text_content[:8000]}  # Limit content to avoid token limits
         
+        SPECIFIC EXAMPLES from your training:
+        - "Crest Quant Alpha": 1.45% -> strategy should be "Quantitative" (from "Quant")
+        - "Crest Merger Fund" -> strategy should be "Event-Driven" (merger arbitrage)
+        - "Boreal Credit Opps" -> strategy should be "Credit" (from fund name)
+        - "Atlas Select" with "Long/Short Eq" -> "Long/Short Equity"
+        - "Atlas Currency" with "Global Macro" -> "Global Macro"
+        
         Please extract all fund performance data from this document and return as valid JSON array.
         Focus on accuracy and completeness. Apply senior analyst expertise to interpret the data correctly.
+        Ensure EVERY fund has a strategy assigned - never leave strategy as null or empty.
         """
         
         with st.spinner(f"AI analyzing {filename}..."):
@@ -261,15 +277,34 @@ def standardize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     if 'aum' in df.columns:
         df['aum'] = pd.to_numeric(df['aum'], errors='coerce')
     
-    # Clean strategy names
+    # Clean and standardize strategy names
     if 'strategy' in df.columns:
         df['strategy'] = df['strategy'].astype(str).str.strip()
+        
+        # Handle null/None/nan strategies
+        df.loc[df['strategy'].isin(['None', 'nan', 'null', '']) | df['strategy'].isnull(), 'strategy'] = 'Multi-Strategy'
+        
+        # Standardize common strategy name variations
+        strategy_mapping = {
+            'L/S Equity': 'Long/Short Equity',
+            'L/S Eq': 'Long/Short Equity',
+            'L/S': 'Long/Short Equity',
+            'Long/Short Eq': 'Long/Short Equity',
+            'Fixed Income Arb': 'Fixed Income Arbitrage',
+            'EventDriven': 'Event-Driven',
+            'Quant': 'Quantitative',
+            'Vol': 'Volatility',
+            'Commodity': 'Commodities'
+        }
+        
+        for old_name, new_name in strategy_mapping.items():
+            df.loc[df['strategy'] == old_name, 'strategy'] = new_name
     
     # Calculate net return in USD if both AUM and return are available
     if 'aum' in df.columns and 'return' in df.columns:
         df['net_return_usd'] = df['return'] * df['aum']
     
-    # Remove rows with missing critical data
+    # Remove rows with missing critical data (fund name is essential)
     df = df.dropna(subset=['fund_name'])
     
     return df
