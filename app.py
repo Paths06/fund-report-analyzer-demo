@@ -378,13 +378,193 @@ def create_visualizations(df: pd.DataFrame):
                     for metric, value in metrics.items():
                         st.metric(metric, value)
 
+def generate_executive_summary_pdf(df: pd.DataFrame) -> bytes:
+    """Generate a professional one-page executive summary PDF"""
+    from matplotlib.backends.backend_pdf import PdfPages
+    import matplotlib.patches as mpatches
+    from datetime import datetime
+    
+    # Create PDF
+    pdf_buffer = BytesIO()
+    
+    with PdfPages(pdf_buffer) as pdf:
+        # Create figure with custom layout
+        fig = plt.figure(figsize=(8.27, 11.69))  # A4 size
+        fig.patch.set_facecolor('white')
+        
+        # Title and header
+        fig.suptitle('FUND PERFORMANCE EXECUTIVE SUMMARY', 
+                    fontsize=20, fontweight='bold', y=0.95)
+        
+        # Date and summary stats
+        report_date = datetime.now().strftime('%B %d, %Y')
+        fig.text(0.1, 0.91, f'Report Date: {report_date}', fontsize=10)
+        fig.text(0.6, 0.91, f'Funds Analyzed: {len(df)} | Strategies: {df["strategy"].nunique() if "strategy" in df.columns else "N/A"}', fontsize=10)
+        
+        # Key Highlights Section
+        ax1 = fig.add_subplot(4, 2, (1, 2))
+        ax1.axis('off')
+        ax1.text(0.02, 0.9, 'KEY HIGHLIGHTS', fontsize=14, fontweight='bold', 
+                transform=ax1.transAxes)
+        
+        highlights = []
+        
+        if 'return' in df.columns and not df['return'].isnull().all():
+            avg_return = df['return'].mean()
+            best_fund = df.loc[df['return'].idxmax(), 'fund_name'] if not df['return'].isnull().all() else "N/A"
+            best_return = df['return'].max()
+            worst_return = df['return'].min()
+            
+            highlights.extend([
+                f"• Portfolio Average Return: {avg_return:.2%}",
+                f"• Best Performer: {best_fund} ({best_return:.2%})",
+                f"• Return Range: {worst_return:.2%} to {best_return:.2%}",
+            ])
+        
+        if 'aum' in df.columns and not df['aum'].isnull().all():
+            total_aum = df['aum'].sum()
+            largest_fund = df.loc[df['aum'].idxmax(), 'fund_name'] if not df['aum'].isnull().all() else "N/A"
+            highlights.extend([
+                f"• Total AUM: ${total_aum:,.0f}M",
+                f"• Largest Fund: {largest_fund}",
+            ])
+        
+        if 'strategy' in df.columns:
+            top_strategy = df.groupby('strategy')['return'].mean().idxmax() if 'return' in df.columns else "N/A"
+            strategy_count = df.groupby('strategy').size().max()
+            highlights.append(f"• Top Strategy: {top_strategy}")
+            highlights.append(f"• Most Common Strategy: {strategy_count} funds")
+        
+        # Display highlights
+        for i, highlight in enumerate(highlights):
+            ax1.text(0.02, 0.75 - i*0.1, highlight, fontsize=11, 
+                    transform=ax1.transAxes)
+        
+        # Top Performers Table
+        ax2 = fig.add_subplot(4, 2, (3, 4))
+        ax2.axis('off')
+        ax2.text(0.02, 0.9, 'TOP PERFORMERS', fontsize=14, fontweight='bold', 
+                transform=ax2.transAxes)
+        
+        if 'return' in df.columns and not df['return'].isnull().all():
+            top_performers = df.nlargest(5, 'return')[['fund_name', 'return', 'strategy']].copy()
+            top_performers['return'] = top_performers['return'].apply(lambda x: f"{x:.2%}")
+            
+            # Create table
+            table_data = []
+            for _, row in top_performers.iterrows():
+                fund_name = row['fund_name'][:25] + "..." if len(row['fund_name']) > 25 else row['fund_name']
+                strategy = row['strategy'][:15] + "..." if len(str(row['strategy'])) > 15 else row['strategy']
+                table_data.append([fund_name, row['return'], strategy])
+            
+            table = ax2.table(cellText=table_data,
+                            colLabels=['Fund Name', 'Return', 'Strategy'],
+                            cellLoc='left',
+                            loc='center',
+                            bbox=[0.02, 0.1, 0.96, 0.7])
+            table.auto_set_font_size(False)
+            table.set_fontsize(9)
+            table.scale(1, 1.5)
+        
+        # Strategy Performance Chart
+        ax3 = fig.add_subplot(4, 2, 5)
+        if 'strategy' in df.columns and 'return' in df.columns:
+            strategy_returns = df.groupby('strategy')['return'].mean().sort_values(ascending=True)
+            colors = plt.cm.RdYlGn(np.linspace(0.2, 0.8, len(strategy_returns)))
+            
+            bars = ax3.barh(range(len(strategy_returns)), strategy_returns.values, color=colors)
+            ax3.set_yticks(range(len(strategy_returns)))
+            ax3.set_yticklabels([s[:12] + "..." if len(s) > 12 else s for s in strategy_returns.index], fontsize=9)
+            ax3.set_xlabel('Average Return', fontsize=10)
+            ax3.set_title('Strategy Performance', fontsize=12, fontweight='bold')
+            ax3.grid(axis='x', alpha=0.3)
+            
+            # Add value labels
+            for i, v in enumerate(strategy_returns.values):
+                ax3.text(v + 0.001, i, f'{v:.1%}', va='center', fontsize=8)
+        
+        # AUM Distribution Chart
+        ax4 = fig.add_subplot(4, 2, 6)
+        if 'aum' in df.columns and not df['aum'].isnull().all():
+            aum_by_strategy = df.groupby('strategy')['aum'].sum().sort_values(ascending=True)
+            colors = plt.cm.Blues(np.linspace(0.4, 0.9, len(aum_by_strategy)))
+            
+            bars = ax4.barh(range(len(aum_by_strategy)), aum_by_strategy.values, color=colors)
+            ax4.set_yticks(range(len(aum_by_strategy)))
+            ax4.set_yticklabels([s[:12] + "..." if len(s) > 12 else s for s in aum_by_strategy.index], fontsize=9)
+            ax4.set_xlabel('Total AUM ($M)', fontsize=10)
+            ax4.set_title('AUM by Strategy', fontsize=12, fontweight='bold')
+            ax4.grid(axis='x', alpha=0.3)
+            
+            # Add value labels
+            for i, v in enumerate(aum_by_strategy.values):
+                ax4.text(v + max(aum_by_strategy.values)*0.01, i, f'${v:.0f}M', va='center', fontsize=8)
+        
+        # Risk Analysis Section
+        ax5 = fig.add_subplot(4, 2, (7, 8))
+        ax5.axis('off')
+        ax5.text(0.02, 0.9, 'RISK ANALYSIS & INSIGHTS', fontsize=14, fontweight='bold', 
+                transform=ax5.transAxes)
+        
+        risk_insights = []
+        
+        if 'return' in df.columns and not df['return'].isnull().all():
+            returns_std = df['return'].std()
+            positive_returns = (df['return'] > 0).sum()
+            total_funds = len(df[df['return'].notna()])
+            
+            risk_insights.extend([
+                f"• Return Volatility: {returns_std:.2%}",
+                f"• Positive Returns: {positive_returns}/{total_funds} funds ({positive_returns/total_funds:.1%})",
+            ])
+            
+            # Sharpe-like ratio (assuming risk-free rate of 2%)
+            excess_return = df['return'].mean() - 0.02
+            if returns_std > 0:
+                risk_adj_return = excess_return / returns_std
+                risk_insights.append(f"• Risk-Adjusted Return Ratio: {risk_adj_return:.2f}")
+        
+        if 'strategy' in df.columns:
+            strategy_consistency = df.groupby('strategy')['return'].std().min()
+            most_consistent = df.groupby('strategy')['return'].std().idxmin()
+            risk_insights.append(f"• Most Consistent Strategy: {most_consistent}")
+        
+        # Display risk insights
+        for i, insight in enumerate(risk_insights):
+            ax5.text(0.02, 0.7 - i*0.12, insight, fontsize=11, 
+                    transform=ax5.transAxes)
+        
+        # Footer
+        fig.text(0.1, 0.02, 'Generated by AI-Powered Fund Analysis Dashboard', 
+                fontsize=8, style='italic', alpha=0.7)
+        fig.text(0.7, 0.02, f'Page 1 of 1', fontsize=8, alpha=0.7)
+        
+        plt.tight_layout()
+        pdf.savefig(fig, bbox_inches='tight', dpi=300)
+        plt.close(fig)
+    
+    return pdf_buffer.getvalue()
+
 def create_download_links(df: pd.DataFrame):
-    """Create download links for reports"""
+    """Create download links for reports including executive summary PDF"""
     st.subheader("⬇️ Download Reports")
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
+        # Executive Summary PDF
+        if st.button("📄 Generate Executive Summary"):
+            with st.spinner("Creating executive summary..."):
+                try:
+                    pdf_bytes = generate_executive_summary_pdf(df)
+                    b64 = base64.b64encode(pdf_bytes).decode()
+                    href = f'<a href="data:application/pdf;base64,{b64}" download="executive_summary.pdf">📄 Download Executive Summary PDF</a>'
+                    st.markdown(href, unsafe_allow_html=True)
+                    st.success("Executive summary generated!")
+                except Exception as e:
+                    st.error(f"Failed to generate PDF: {e}")
+    
+    with col2:
         # Excel download
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -403,14 +583,14 @@ def create_download_links(df: pd.DataFrame):
         href = f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}" download="fund_analysis.xlsx">📊 Download Excel Report</a>'
         st.markdown(href, unsafe_allow_html=True)
     
-    with col2:
+    with col3:
         # CSV download
         csv_data = df.to_csv(index=False)
         b64 = base64.b64encode(csv_data.encode()).decode()
         href = f'<a href="data:text/csv;base64,{b64}" download="fund_data.csv">📋 Download CSV Data</a>'
         st.markdown(href, unsafe_allow_html=True)
     
-    with col3:
+    with col4:
         # JSON download
         json_data = df.to_json(orient='records', indent=2)
         b64 = base64.b64encode(json_data.encode()).decode()
