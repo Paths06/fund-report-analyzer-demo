@@ -393,33 +393,47 @@ def extract_fund_data_with_gemini_enhanced(model, text_content: str, filename: s
             
             # Enhanced JSON parsing with better error handling
             response_text = response.text.strip()
-            
-            # Multiple attempts to extract JSON
+
+            # Debug: Show more of the raw response
+            st.write("Raw AI Response Length:", len(response_text))
+            st.write("Raw AI Response (first 1000 chars):", response_text[:1000])
+            st.write("Raw AI Response (last 500 chars):", response_text[-500:])
+
             json_text = None
-            
+
             # Method 1: Look for ```json blocks
             if '```json' in response_text:
                 json_start = response_text.find('```json') + 7
                 json_end = response_text.find('```', json_start)
-                json_text = response_text[json_start:json_end]
-            
+                if json_end == -1:  # No closing ```
+                    json_text = response_text[json_start:]
+                else:
+                    json_text = response_text[json_start:json_end]
+
             # Method 2: Look for [ ] array
             elif '[' in response_text and ']' in response_text:
                 json_start = response_text.find('[')
+                # Find the LAST occurrence of ] to get complete JSON
                 json_end = response_text.rfind(']') + 1
                 json_text = response_text[json_start:json_end]
-            
+                
+                # If still incomplete, try to find a more complete version
+                if not json_text.strip().endswith(']'):
+                    # Look for the pattern and try to reconstruct
+                    st.warning("JSON appears incomplete, attempting reconstruction...")
+
             # Method 3: Try to clean up the response
             else:
-                # Remove common AI response prefixes
                 cleaned = response_text.replace("Here's the extracted data:", "")
                 cleaned = cleaned.replace("Based on the document:", "")
-                # Look for JSON-like structures
-                # import re
                 json_pattern = r'\[.*?\]'
                 matches = re.findall(json_pattern, cleaned, re.DOTALL)
                 if matches:
                     json_text = matches[0]
+
+            # Show what we extracted for debugging
+            st.write("Extracted JSON length:", len(json_text) if json_text else 0)
+            st.write("Extracted JSON:", json_text[:500] if json_text else "None")
             
             if json_text is None:
                 st.warning(f"Could not find valid JSON in AI response for {filename}")
