@@ -393,47 +393,33 @@ def extract_fund_data_with_gemini_enhanced(model, text_content: str, filename: s
             
             # Enhanced JSON parsing with better error handling
             response_text = response.text.strip()
-
-            # Debug: Show more of the raw response
-            st.write("Raw AI Response Length:", len(response_text))
-            st.write("Raw AI Response (first 1000 chars):", response_text[:1000])
-            st.write("Raw AI Response (last 500 chars):", response_text[-500:])
-
+            
+            # Multiple attempts to extract JSON
             json_text = None
-
+            
             # Method 1: Look for ```json blocks
             if '```json' in response_text:
                 json_start = response_text.find('```json') + 7
                 json_end = response_text.find('```', json_start)
-                if json_end == -1:  # No closing ```
-                    json_text = response_text[json_start:]
-                else:
-                    json_text = response_text[json_start:json_end]
-
+                json_text = response_text[json_start:json_end]
+            
             # Method 2: Look for [ ] array
             elif '[' in response_text and ']' in response_text:
                 json_start = response_text.find('[')
-                # Find the LAST occurrence of ] to get complete JSON
                 json_end = response_text.rfind(']') + 1
                 json_text = response_text[json_start:json_end]
-                
-                # If still incomplete, try to find a more complete version
-                if not json_text.strip().endswith(']'):
-                    # Look for the pattern and try to reconstruct
-                    st.warning("JSON appears incomplete, attempting reconstruction...")
-
+            
             # Method 3: Try to clean up the response
             else:
+                # Remove common AI response prefixes
                 cleaned = response_text.replace("Here's the extracted data:", "")
                 cleaned = cleaned.replace("Based on the document:", "")
+                # Look for JSON-like structures
+                # import re
                 json_pattern = r'\[.*?\]'
                 matches = re.findall(json_pattern, cleaned, re.DOTALL)
                 if matches:
                     json_text = matches[0]
-
-            # Show what we extracted for debugging
-            st.write("Extracted JSON length:", len(json_text) if json_text else 0)
-            st.write("Extracted JSON:", json_text[:500] if json_text else "None")
             
             if json_text is None:
                 st.warning(f"Could not find valid JSON in AI response for {filename}")
@@ -449,17 +435,19 @@ def extract_fund_data_with_gemini_enhanced(model, text_content: str, filename: s
                 json_text = json_text.replace("'", '"')  # Replace single quotes
                 json_text = re.sub(r',\s*}', '}', json_text)  # Remove trailing commas
                 json_text = re.sub(r',\s*]', ']', json_text)  # Remove trailing commas
+                
+                # Remove JSON comments (// style comments)
+                json_text = re.sub(r'//.*?(?=\n|$)', '', json_text)
+                
+                # Remove /* */ style comments
+                json_text = re.sub(r'/\*.*?\*/', '', json_text, flags=re.DOTALL)
+                
                 try:
                     fund_data = json.loads(json_text)
                 except:
                     st.error(f"Could not parse JSON for {filename}")
                     st.write("Cleaned JSON:", json_text[:500])
                     return pd.DataFrame()
-            
-            # Convert to DataFrame with enhanced validation
-            if not fund_data or not isinstance(fund_data, list):
-                st.warning(f"No valid fund data found in {filename}")
-                return pd.DataFrame()
             
             df = pd.DataFrame(fund_data)
             
