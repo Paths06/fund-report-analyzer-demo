@@ -819,8 +819,8 @@ def generate_executive_summary_pdf(df: pd.DataFrame) -> bytes:
         fig2.patch.set_facecolor('white')
         
         # Page 2 Title
-        fig2.text(0.5, 0.95, 'PERFORMANCE ANALYSIS CHARTS', 
-                 fontsize=16, fontweight='bold', ha='center')
+        # fig2.text(0.5, 0.95, 'PERFORMANCE ANALYSIS CHARTS', 
+        #          fontsize=16, fontweight='bold', ha='center')
         
         # Chart 1: Fund Performance Ranking - FIXED SPACING
         if 'return' in df.columns and not df['return'].isnull().all():
