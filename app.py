@@ -494,7 +494,7 @@ class ContextCache:
         
         Your job is to be the expert human analyst who can extract meaningful data from ANY of these formats.
         """
-    # Enhanced file processing functions with dark theme status updates
+# Enhanced file processing functions with dark theme status updates
 
     def extract_text_content_enhanced(file_content: bytes, filename: str) -> str:
         """Enhanced text extraction with multiple fallback methods"""
