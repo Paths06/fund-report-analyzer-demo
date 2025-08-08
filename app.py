@@ -641,7 +641,7 @@ def generate_executive_summary_pdf(df: pd.DataFrame) -> bytes:
         
         # fig1.text(0.1, 0.90, f'Report Date: {report_date}', fontsize=11, fontweight='bold')
         fig1.text(0.5, 0.90, f'Portfolio Overview: {total_funds} Funds across {total_strategies} Strategies', 
-                 fontsize=11, fontweight='bold', ha='center')
+                 fontsize=11, fontweight='bold', ha='left')
         
         if 'aum' in df.columns and not df['aum'].isnull().all():
             total_aum = df['aum'].sum()
