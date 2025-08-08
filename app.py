@@ -1275,6 +1275,7 @@ def create_download_links(df: pd.DataFrame):
         st.markdown(href, unsafe_allow_html=True)
 
 # Enhanced main application with professional styling
+# Enhanced main application with professional styling - COMPLETE CORRECTED VERSION
 def main():
     model = initialize_gemini()
     cache = get_context_cache()
@@ -1470,7 +1471,7 @@ def main():
             """, unsafe_allow_html=True)
     
     else:
-        # Enhanced welcome section with professional styling - IN MAIN AREA
+        # Enhanced welcome section with professional styling - CORRECTED VERSION
         st.markdown("""
         <div class="analysis-section">
             <h2>🚀 Welcome to AI-Powered Fund Analysis</h2>
@@ -1535,7 +1536,7 @@ def main():
         </div>
         """, unsafe_allow_html=True)
         
-        # Enhanced capabilities section
+        # Enhanced capabilities section - CORRECTED VERSION
         st.markdown("""
         <div class="analysis-section">
             <h3>🎯 What Our AI Can Extract</h3>
