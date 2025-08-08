@@ -6,595 +6,534 @@ import os
 import pandas as pd
 import PyPDF2
 import matplotlib.pyplot as plt
+import json
 import re
 from io import BytesIO
-from openpyxl import load_workbook
-from difflib import get_close_matches
-import matplotlib.backends.backend_pdf
+from typing import Dict, List, Any, Optional
 import base64
+import matplotlib.backends.backend_pdf
+from datetime import datetime, timedelta
+import google.generativeai as genai
+from google.generativeai import caching
+import time
+import hashlib
 
 # Page configuration
 st.set_page_config(
-    page_title="Fund Report Analysis Dashboard",
-    page_icon="📊",
+    page_title="AI-Powered Fund Report Analysis Dashboard",
+    page_icon="🤖",
     layout="wide"
 )
 
-st.title("📊 Fund Report Analysis Dashboard")
-st.write("Upload your fund return files (PDF or Excel) to process them and generate a consolidated report.")
+st.title("🤖 AI-Powered Fund Report Analysis Dashboard")
+st.write("Upload your fund documents in any format. Our AI will intelligently extract and analyze fund performance data.")
 
-# Fuzzy Column Matching for Excel Files
-def match_column(possible_names, available_columns):
-    """
-    Performs fuzzy matching for column names.
-    """
-    for name in possible_names:
-        match = get_close_matches(name.lower(), available_columns, n=1, cutoff=0.6)
-        if match:
-            return match[0]
-    return None
+# Initialize Gemini API
+@st.cache_resource
+def initialize_gemini():
+    """Initialize Gemini API with API key from Streamlit secrets or environment"""
+    try:
+        api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            st.error("⚠️ GEMINI_API_KEY not found. Please add it to your Streamlit secrets or environment variables.")
+            st.stop()
+        
+        genai.configure(api_key=api_key)
+        return genai.GenerativeModel('gemini-1.5-pro')
+    except Exception as e:
+        st.error(f"Failed to initialize Gemini: {e}")
+        st.stop()
 
-# Data Extraction
-def parse_aum(aum_string):
-    """
-    Parses AUM strings into a consistent numerical format (in Millions USD).
-    Handles 'B' for billions, commas, and non-numeric characters.
-    """
-    if not isinstance(aum_string, str):
-        return float(aum_string)
-
-    aum_string = aum_string.strip().lower()
-    num_str = re.sub(r'[^\d.]', '', aum_string)
-    if not num_str:
+# Context caching management
+class ContextCache:
+    """Manages context caching for Gemini API to optimize token usage"""
+    
+    def __init__(self):
+        self.cache_store = {}
+        self.cache_expiry = timedelta(hours=1)  # Cache expires after 1 hour
+    
+    def get_cache_key(self, content: str) -> str:
+        """Generate a unique cache key based on content hash"""
+        return hashlib.md5(content.encode()).hexdigest()
+    
+    def get_cached_context(self, content: str):
+        """Retrieve cached context if available and not expired"""
+        cache_key = self.get_cache_key(content)
+        if cache_key in self.cache_store:
+            cached_data, timestamp = self.cache_store[cache_key]
+            if datetime.now() - timestamp < self.cache_expiry:
+                return cached_data
+            else:
+                # Remove expired cache
+                del self.cache_store[cache_key]
         return None
+    
+    def set_cached_context(self, content: str, context_data: Any):
+        """Cache the context data"""
+        cache_key = self.get_cache_key(content)
+        self.cache_store[cache_key] = (context_data, datetime.now())
+    
+    def create_system_context(self) -> str:
+        """Create the system context for fund analysis"""
+        return """
+        You are a senior financial analyst specializing in hedge fund and investment fund analysis. 
+        Your task is to extract structured fund performance data from various document formats.
+        
+        EXTRACTION REQUIREMENTS:
+        1. Fund Name: Complete fund name (clean and standardized)
+        2. Return/Performance: Weekly, monthly, or period returns (convert to decimal, e.g., 5% = 0.05)
+        3. AUM (Assets Under Management): In millions USD (convert B to thousands of millions)
+        4. Strategy: Investment strategy category (standardized names)
+        5. Additional Metrics: Any other relevant performance metrics
+        
+        STANDARDIZATION RULES:
+        - Strategy names: Use standard categories like "Long/Short Equity", "Global Macro", "Event-Driven", etc.
+        - AUM: Always in millions USD
+        - Returns: Always as decimals (5% = 0.05)
+        - Fund names: Clean, remove special characters and formatting artifacts
+        
+        OUTPUT FORMAT: Return data as a JSON array of objects with consistent field names:
+        [
+            {
+                "fund_name": "Clean Fund Name",
+                "return": 0.025,
+                "aum": 150.5,
+                "strategy": "Long/Short Equity",
+                "additional_metrics": {}
+            }
+        ]
+        
+        QUALITY STANDARDS:
+        - Extract ALL funds mentioned in the document
+        - Ensure data consistency and accuracy
+        - Handle missing data gracefully (use null for missing values)
+        - Identify and skip header/footer information
+        - Apply senior analyst judgment for ambiguous cases
+        """
 
-    num = float(num_str)
+# Initialize cache
+@st.cache_resource
+def get_context_cache():
+    return ContextCache()
 
-    if 'b' in aum_string:
-        return num * 1000 # Convert billions to millions for consistency
-    return num
-
-def clean_text_field(text):
-    """
-    Cleans extracted text fields to remove noise.
-    """
-    if isinstance(text, str):
-        # Remove any leading/trailing special characters like '*', '-', ':'
-        text = re.sub(r'^[^\w\s/]+|[^\w\s/]+$', '', text)
-        # Replace multiple newlines/spaces with a single space
-        text = re.sub(r'\s+', ' ', text)
-        # Remove specific known noise patterns if they appear within names
-        text = text.replace('**Weekly Performance Update**', '').replace('Strategy | Fund | Week Return | Assets | ||', '')
-        # Remove common artifacts like '**', '|', '--' that might still be present
-        text = re.sub(r'[\*\-|]+', '', text)
-        text = text.strip()
-    return text
-
-def extract_pdf_data(file_content, filename):
-    """
-    Extracts fund data from PDF files using various regex patterns for different formats.
-    """
-    st.write(f"--- Processing PDF: {filename} ---")
-    data = []
+# File processing functions
+def extract_text_from_pdf(file_content: bytes) -> str:
+    """Extract text from PDF files"""
     try:
         reader = PyPDF2.PdfReader(BytesIO(file_content))
         text = "\n".join([page.extract_text() for page in reader.pages if page.extract_text()])
-
-        # --- Specific pre-processing for __Weekly Performance Update__.pdf ---
-        if "__Weekly Performance Update__.pdf" in filename:
-            # Combine lines split by the PyPDF2-specific `","` artifact
-            text = text.replace('"\n","', ' ') # Merges lines like "...\n", "..." -> "... ..."
-            text = text.replace('"\n', ' ')    # Removes trailing " and newline from a segment
-            text = text.replace('"', '')       # Remove any remaining quotes
-            text = re.sub(r'\s+', ' ', text)   # Replace multiple spaces with a single space
-            text = text.replace('\n', ' ')
-
+        return text
     except Exception as e:
-        st.error(f"Error reading PDF file {filename}: {e}")
+        st.warning(f"PDF extraction failed: {e}")
+        return ""
+
+def extract_text_from_excel(file_content: bytes, filename: str) -> str:
+    """Convert Excel data to text representation"""
+    try:
+        # Try reading all sheets
+        excel_data = pd.read_excel(BytesIO(file_content), sheet_name=None)
+        text_content = []
+        
+        for sheet_name, df in excel_data.items():
+            text_content.append(f"=== Sheet: {sheet_name} ===")
+            text_content.append(df.to_string(index=False))
+            text_content.append("\n")
+        
+        return "\n".join(text_content)
+    except Exception as e:
+        st.warning(f"Excel extraction failed: {e}")
+        return ""
+
+def extract_text_from_csv(file_content: bytes) -> str:
+    """Extract text from CSV files"""
+    try:
+        df = pd.read_csv(BytesIO(file_content))
+        return df.to_string(index=False)
+    except Exception as e:
+        st.warning(f"CSV extraction failed: {e}")
+        return ""
+
+def extract_text_content(file_content: bytes, filename: str) -> str:
+    """Extract text content from various file formats"""
+    filename_lower = filename.lower()
+    
+    if filename_lower.endswith('.pdf'):
+        return extract_text_from_pdf(file_content)
+    elif filename_lower.endswith(('.xlsx', '.xls')):
+        return extract_text_from_excel(file_content, filename)
+    elif filename_lower.endswith('.csv'):
+        return extract_text_from_csv(file_content)
+    elif filename_lower.endswith('.txt'):
+        return file_content.decode('utf-8', errors='ignore')
+    else:
+        # Try to decode as text for unknown formats
+        try:
+            return file_content.decode('utf-8', errors='ignore')
+        except:
+            st.warning(f"Unsupported file format: {filename}")
+            return ""
+
+def extract_fund_data_with_gemini(model, text_content: str, filename: str, cache: ContextCache) -> pd.DataFrame:
+    """Extract fund data using Gemini AI with context caching"""
+    
+    # Check cache first
+    cached_result = cache.get_cached_context(text_content)
+    if cached_result is not None:
+        st.info(f"Using cached analysis for {filename}")
+        return cached_result
+    
+    try:
+        system_context = cache.create_system_context()
+        
+        prompt = f"""
+        {system_context}
+        
+        DOCUMENT TO ANALYZE: {filename}
+        
+        CONTENT:
+        {text_content[:8000]}  # Limit content to avoid token limits
+        
+        Please extract all fund performance data from this document and return as valid JSON array.
+        Focus on accuracy and completeness. Apply senior analyst expertise to interpret the data correctly.
+        """
+        
+        with st.spinner(f"AI analyzing {filename}..."):
+            response = model.generate_content(prompt)
+            
+            # Parse JSON response
+            response_text = response.text.strip()
+            
+            # Clean up response to extract JSON
+            if '```json' in response_text:
+                json_start = response_text.find('```json') + 7
+                json_end = response_text.find('```', json_start)
+                json_text = response_text[json_start:json_end]
+            elif '[' in response_text and ']' in response_text:
+                json_start = response_text.find('[')
+                json_end = response_text.rfind(']') + 1
+                json_text = response_text[json_start:json_end]
+            else:
+                json_text = response_text
+            
+            # Parse JSON
+            fund_data = json.loads(json_text)
+            
+            # Convert to DataFrame
+            df = pd.DataFrame(fund_data)
+            
+            # Cache the result
+            cache.set_cached_context(text_content, df)
+            
+            st.success(f"✅ Extracted {len(df)} funds from {filename}")
+            return df
+            
+    except json.JSONDecodeError as e:
+        st.error(f"Failed to parse AI response for {filename}: {e}")
+        st.write("Raw AI Response:", response.text[:500])
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"AI extraction failed for {filename}: {e}")
         return pd.DataFrame()
 
-    crest_pattern = re.compile(
-        r'-\s*\*\*(?P<fund_name>[^*]+?)\*\*\s*:\s*(?P<return_val>[\d\.\-]+)%\s*'
-        r'(?:\(AUM:\s*(?P<aum_val>[\d\.\,]+\s*[MB]?)\))?\s*\|\s*Strat:\s*(?P<strategy_val>[\w\-]+)',
-        re.IGNORECASE | re.MULTILINE
-    )
-
-    pattern_report1 = re.compile(
-        r'Fund\s+Name\s*:\s*(?P<fund_name>.*?)\s*\n+'
-        r'Return\s+\(%\)\s*:\s*(?P<return_val>[\d\.\-]+)\s*\n+'
-        r'AUM\s*:\s*(?P<aum_val>[\d\.\,]+\s*[MB]?)\s*\n+'
-        r'Category\s*:\s*(?P<strategy_val>.*?)\s*\n+',
-        re.IGNORECASE | re.MULTILINE | re.DOTALL
-    )
-
-    weekly_perf_pattern = re.compile(
-        r'(?P<strategy>[^|]+?)\s*\|\s*'
-        r'(?P<fund_name>[^|]+?)\s*\|\s*'
-        r'(?P<return_val>[\+\-]?[\d\.]+%)?\s*\|\s*'
-        r'(?P<aum_val>[\d\.\,]+\s*[MB]?)?\s*\|\s*',
-        re.IGNORECASE | re.DOTALL # DOTALL to match across lines if text wasn't fully flattened
-    )
-
-    # General pattern for documents with "Fund Name : X% (AUM: Y) | Strat: Z"
-    pattern = re.compile(
-        r"([\w\s\*\-]+?)\s*:\s*"
-        r"([\d\.\-]+)%\s*"
-        r"(?:\(AUM:\s*([\d\.\,]+\s*[MB]?)\))?\s*"
-        r"\|\s*Strat:\s*([\w\-]+)",
-        re.IGNORECASE | re.MULTILINE
-    )
-
-    # General pattern for documents with "Fund Name | X% | Y | Z"
-    pipe_pattern = re.compile(
-        r"([\w\s]+)\s*\|\s*"
-        r"([\d\.\-]+)%\s*\|\s*"
-        r"([\d\.\,]+)\s*\|\s*"
-        r"([\w\-]+)",
-        re.IGNORECASE | re.MULTILINE
-    )
-
-    extracted_count = 0
-
-    # Try Crest.pdf specific pattern first
-    matches = crest_pattern.finditer(text)
-    for match in matches:
-        try:
-            fund_name = clean_text_field(match.group('fund_name'))
-            ret = float(match.group('return_val')) / 100
-            aum_str = match.group('aum_val')
-            aum = parse_aum(aum_str) if aum_str else None
-            strategy = clean_text_field(match.group('strategy_val'))
-
-            data.append({
-                "fund_name": fund_name,
-                "return": ret,
-                "aum": aum,
-                "strategy": strategy
-            })
-            extracted_count += 1
-        except Exception as e:
-            st.warning(f"Could not parse Crest format match: {match.groups()} - Error: {e}")
-
-    # Try __Weekly Performance Update__.pdf specific pattern next
-    if extracted_count == 0 or "__Weekly Performance Update__.pdf" in filename:
-        matches = weekly_perf_pattern.finditer(text)
-        for match in matches:
-            try:
-                strategy = clean_text_field(match.group('strategy'))
-                fund_name = clean_text_field(match.group('fund_name'))
-
-                # Skip common header/footer lines explicitly
-                if any(phrase in fund_name.lower() for phrase in ["strategy | fund", "week return", "assets"]):
-                    continue
-                if "weekly performance update" in fund_name.lower():
-                    continue
-
-                ret_val = match.group('return_val')
-                ret = float(ret_val.replace('%', '')) / 100 if ret_val else None
-                aum_str = match.group('aum_val')
-                aum = parse_aum(aum_str) if aum_str else None
-
-                data.append({
-                    "fund_name": fund_name,
-                    "return": ret,
-                    "aum": aum,
-                    "strategy": strategy
-                })
-                extracted_count += 1
-            except Exception as e:
-                st.warning(f"Could not parse Weekly Performance format match: {match.groups()} - Error: {e}")
-
-    # Try Report1.pdf specific pattern if previous patterns didn't find anything
-    if extracted_count == 0:
-        matches = pattern_report1.finditer(text)
-        for match in matches:
-            try:
-                fund_name = clean_text_field(match.group('fund_name'))
-                ret = float(match.group('return_val')) / 100
-                aum_str = match.group('aum_val')
-                aum = parse_aum(aum_str) if aum_str else None
-                strategy = clean_text_field(match.group('strategy_val'))
-
-                data.append({
-                    "fund_name": fund_name,
-                    "return": ret,
-                    "aum": aum,
-                    "strategy": strategy
-                })
-                extracted_count += 1
-            except Exception as e:
-                st.warning(f"Could not parse Report1-format match: {match.groups()} - Error: {e}")
-
-    # Fallback to general pattern if still no data extracted
-    if extracted_count == 0:
-        matches = pattern.finditer(text)
-        for match in matches:
-            try:
-                raw_name = match.group(1)
-                fund_name = clean_text_field(raw_name)
-
-                # Skip common header/footer lines explicitly
-                if any(phrase in fund_name.lower() for phrase in ["strategy | fund", "week return", "assets", "fund name", "return", "aum", "category"]):
-                    continue
-                if "weekly performance update" in fund_name.lower():
-                    continue
-
-                ret = float(match.group(2).replace('%', '')) / 100
-                aum_str = match.group(3)
-                aum = parse_aum(aum_str) if aum_str else None
-                strategy = clean_text_field(match.group(4))
-
-                data.append({
-                    "fund_name": fund_name,
-                    "return": ret,
-                    "aum": aum,
-                    "strategy": strategy
-                })
-                extracted_count +=1
-            except Exception as e:
-                st.warning(f"Could not parse general format match: {match.groups()} - Error: {e}")
-
-    # Fallback to pipe-separated pattern if still no data extracted
-    if extracted_count == 0:
-        matches = pipe_pattern.finditer(text)
-        for match in matches:
-            try:
-                raw_name = match.group(1)
-                fund_name = clean_text_field(raw_name)
-
-                # Skip common header/footer lines explicitly
-                if any(phrase in fund_name.lower() for phrase in ["strategy | fund", "week return", "assets", "fund name", "return", "aum", "category"]):
-                    continue
-                if "weekly performance update" in fund_name.lower():
-                    continue
-
-                ret = float(match.group(2).replace('%', '')) / 100
-                aum = parse_aum(match.group(3))
-                strategy = clean_text_field(match.group(4))
-                data.append({
-                    "fund_name": fund_name,
-                    "return": ret,
-                    "aum": aum,
-                    "strategy": strategy
-                })
-                extracted_count += 1
-            except Exception as e:
-                st.warning(f"Could not parse pipe-format match: {match.groups()} - Error: {e}")
-
-    st.write(f"Extracted {len(data)} records from {filename}")
-    return pd.DataFrame(data)
-
-def extract_excel_data(file_content, filename):
-    """
-    Extracts fund data from Excel files.
-    """
-    st.write(f"--- Processing Excel: {filename} ---")
-    df = pd.read_excel(BytesIO(file_content))
-    df.columns = [col.strip().lower().replace(" ", "_") for col in df.columns]
-    cols = list(df.columns)
-
-    fund_col = match_column(["fund_name", "fund"], cols)
-    ret_col = match_column(["weekly_return_(%)", "weekly_return", "return", "performance"], cols)
-    aum_col = match_column(["aum", "aum_(m_usd)", "net_assets", "assets"], cols)
-    strat_col = match_column(["strategy", "strat", "approach"], cols)
-
-    if not all([fund_col, ret_col, strat_col]):
-        raise ValueError(f"Missing required columns (Fund, Return, Strategy) in {filename}")
-
-    new_df = pd.DataFrame()
-    new_df["fund_name"] = df[fund_col].apply(clean_text_field)
-    new_df["return"] = pd.to_numeric(df[ret_col], errors='coerce') / 100
-    new_df["strategy"] = df[strat_col].apply(clean_text_field)
-    new_df["aum"] = df[aum_col].apply(parse_aum) if aum_col else None
-
-    new_df.dropna(subset=['fund_name', 'return', 'strategy'], inplace=True)
-
-    st.write(f"Extracted {len(new_df)} records from {filename}")
-    return new_df[["fund_name", "return", "aum", "strategy"]]
-
-def standardize_strategy_names(df):
-    """
-    Standardizes strategy names in the DataFrame.
-    """
-    df['strategy'] = df['strategy'].replace({
-        'L/S Equity': 'Long/Short Equity',
-        'L/S Eq': 'Long/Short Equity',
-        'L/S': 'Long/Short Equity',
-        'Long/Short Eq': 'Long/Short Equity',
-        'Fixed Income Arb': 'Fixed Income Arbitrage',
-        'Fixed Income Arbitrage': 'Fixed Income Arbitrage',
-        'Global Macro': 'Global Macro',
-        'EventDriven': 'Event-Driven',
-        'Credit': 'Credit',
-        'Multi-Strategy': 'Multi-Strategy',
-        'Quant': 'Quantitative',
-        'Vol': 'Volatility',
-        'Commodity': 'Commodities'
-    }).str.strip() # Remove any leading/trailing whitespace after standardization
+def standardize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Standardize the extracted DataFrame"""
+    if df.empty:
+        return df
+    
+    # Ensure required columns exist
+    required_columns = ['fund_name', 'return', 'strategy']
+    for col in required_columns:
+        if col not in df.columns:
+            df[col] = None
+    
+    # Add AUM column if missing
+    if 'aum' not in df.columns:
+        df['aum'] = None
+    
+    # Data cleaning and standardization
+    df['fund_name'] = df['fund_name'].astype(str).str.strip()
+    
+    # Convert returns to numeric
+    if 'return' in df.columns:
+        df['return'] = pd.to_numeric(df['return'], errors='coerce')
+    
+    # Convert AUM to numeric
+    if 'aum' in df.columns:
+        df['aum'] = pd.to_numeric(df['aum'], errors='coerce')
+    
+    # Clean strategy names
+    if 'strategy' in df.columns:
+        df['strategy'] = df['strategy'].astype(str).str.strip()
+    
+    # Calculate net return in USD if both AUM and return are available
+    if 'aum' in df.columns and 'return' in df.columns:
+        df['net_return_usd'] = df['return'] * df['aum']
+    
+    # Remove rows with missing critical data
+    df = df.dropna(subset=['fund_name'])
+    
     return df
 
-def create_download_link(df, filename, label):
-    """Create a download link for a DataFrame as Excel file"""
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='FundData')
-    excel_data = output.getvalue()
-    b64 = base64.b64encode(excel_data).decode()
-    href = f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}" download="{filename}">{label}</a>'
-    return href
-
-def create_pdf_download_link(pdf_bytes, filename, label):
-    """Create a download link for PDF"""
-    b64 = base64.b64encode(pdf_bytes).decode()
-    href = f'<a href="data:application/pdf;base64,{b64}" download="{filename}">{label}</a>'
-    return href
-
-# File uploader
-uploaded_files = st.file_uploader(
-    "Choose files", 
-    accept_multiple_files=True,
-    type=['pdf', 'xlsx', 'xls'],
-    help="Upload PDF or Excel files containing fund return data"
-)
-
-if uploaded_files:
-    st.write(f"Uploaded {len(uploaded_files)} files")
+def create_visualizations(df: pd.DataFrame):
+    """Create comprehensive visualizations"""
+    if df.empty:
+        st.warning("No data available for visualization")
+        return
     
-    # Process files
-    all_data = []
+    st.subheader("📊 Performance Analytics")
     
-    for uploaded_file in uploaded_files:
-        file_content = uploaded_file.read()
-        filename = uploaded_file.name
-        
-        try:
-            if filename.lower().endswith(".pdf"):
-                df = extract_pdf_data(file_content, filename)
-            elif filename.lower().endswith((".xlsx", ".xls")):
-                df = extract_excel_data(file_content, filename)
-            else:
-                st.warning(f"Skipping unsupported file type: {filename}")
-                continue
-
-            if not df.empty:
-                all_data.append(df)
-        except Exception as e:
-            st.error(f"!!! Failed to process {filename}: {e} !!!")
-
-    # Display, Analyze, and Export
-    if all_data:
-        combined_df = pd.concat(all_data, ignore_index=True)
-
-        # Standardize strategy names
-        combined_df = standardize_strategy_names(combined_df)
-
-        # Calculate Net Return in USD if AUM and Return data are available
-        if "aum" in combined_df.columns and "return" in combined_df.columns:
-            combined_df["net_return_usd"] = combined_df["return"] * combined_df["aum"]
-
-        st.subheader("Combined Fund Data")
-        st.dataframe(combined_df, use_container_width=True)
-
-        st.subheader("📊 Analysis & Visualizations")
-
-        # Create visualizations
+    # Create tabs for different analysis views
+    tab1, tab2, tab3, tab4 = st.tabs(["Returns Analysis", "AUM Analysis", "Strategy Performance", "Risk Metrics"])
+    
+    with tab1:
         col1, col2 = st.columns(2)
         
         with col1:
-            # Plot 1: Average Return by Fund
-            if not combined_df.empty:
-                st.subheader("Average Return by Fund")
-                avg_returns = combined_df.groupby("fund_name")["return"].mean().sort_values()
-                fig, ax = plt.subplots(figsize=(10, 6))
-                bars = ax.barh(range(len(avg_returns)), avg_returns.values)
-                ax.set_yticks(range(len(avg_returns)))
-                ax.set_yticklabels(avg_returns.index)
-                ax.set_xlabel("Average Return")
-                ax.set_title("Average Return by Fund")
-                
-                # Add labels to bars
-                for i, v in enumerate(avg_returns.values):
-                    ax.text(v + 0.0005, i, f"{v:.2%}", color='black', va='center')
-                
-                plt.tight_layout()
-                st.pyplot(fig)
-                plt.close()
-
-            # Plot 3: Average Return by Strategy
-            if not combined_df.empty:
-                st.subheader("Average Return by Strategy")
-                avg_ret_by_strategy = combined_df.groupby("strategy")["return"].mean().sort_values()
-                fig, ax = plt.subplots(figsize=(10, 6))
-                bars = ax.barh(range(len(avg_ret_by_strategy)), avg_ret_by_strategy.values, color="green")
-                ax.set_yticks(range(len(avg_ret_by_strategy)))
-                ax.set_yticklabels(avg_ret_by_strategy.index)
-                ax.set_xlabel("Average Return")
-                ax.set_title("Average Return by Strategy")
-                
-                # Add labels to bars
-                for i, v in enumerate(avg_ret_by_strategy.values):
-                    ax.text(v + 0.0005, i, f"{v:.2%}", color='black', va='center')
-                
-                plt.tight_layout()
-                st.pyplot(fig)
-                plt.close()
-
+            if 'return' in df.columns and not df['return'].isnull().all():
+                st.write("**Top Performing Funds**")
+                top_funds = df.nlargest(10, 'return')[['fund_name', 'return', 'strategy']]
+                top_funds['return'] = top_funds['return'].apply(lambda x: f"{x:.2%}" if pd.notna(x) else "N/A")
+                st.dataframe(top_funds, use_container_width=True)
+        
         with col2:
-            # Plot 2: Total AUM by Strategy
-            if "aum" in combined_df.columns and not combined_df["aum"].isnull().all():
-                st.subheader("Total AUM by Strategy")
-                aum_by_strategy = combined_df.dropna(subset=["aum"]).groupby("strategy")["aum"].sum().sort_values()
-                fig, ax = plt.subplots(figsize=(10, 6))
-                bars = ax.barh(range(len(aum_by_strategy)), aum_by_strategy.values, color="orange")
-                ax.set_yticks(range(len(aum_by_strategy)))
-                ax.set_yticklabels(aum_by_strategy.index)
-                ax.set_xlabel("Total AUM (M USD)")
-                ax.set_title("Total AUM by Strategy")
-                
-                # Add labels to bars
-                for i, v in enumerate(aum_by_strategy.values):
-                    ax.text(v + 10, i, f"${v:,.0f}M", color='black', va='center')
-                
+            if 'return' in df.columns and not df['return'].isnull().all():
+                st.write("**Return Distribution**")
+                fig, ax = plt.subplots(figsize=(8, 6))
+                returns_clean = df['return'].dropna()
+                ax.hist(returns_clean, bins=20, alpha=0.7, color='skyblue')
+                ax.set_xlabel('Return')
+                ax.set_ylabel('Frequency')
+                ax.set_title('Distribution of Fund Returns')
                 plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
-
-            # Plot 4: Total AUM by Fund
-            if "aum" in combined_df.columns and not combined_df["aum"].isnull().all():
-                st.subheader("Total AUM by Fund")
-                aum_by_fund = combined_df.dropna(subset=["aum"]).groupby("fund_name")["aum"].sum().sort_values()
-                fig, ax = plt.subplots(figsize=(10, 6))
-                bars = ax.barh(range(len(aum_by_fund)), aum_by_fund.values, color="purple")
-                ax.set_yticks(range(len(aum_by_fund)))
-                ax.set_yticklabels(aum_by_fund.index)
-                ax.set_xlabel("Total AUM (M USD)")
-                ax.set_title("Total AUM by Fund")
-                
-                # Add labels to bars
-                for i, v in enumerate(aum_by_fund.values):
-                    ax.text(v + 10, i, f"${v:,.0f}M", color='black', va='center')
-                
-                plt.tight_layout()
-                st.pyplot(fig)
-                plt.close()
-
-        # Summary Statistics
-        st.subheader("📈 Summary & Statistics")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric("Total Funds", combined_df['fund_name'].nunique())
-            
-        with col2:
-            st.metric("Total Strategies", combined_df['strategy'].nunique())
-            
-        with col3:
-            if "aum" in combined_df.columns and not combined_df['aum'].isnull().all():
-                total_aum = combined_df['aum'].sum()
-                st.metric("Total AUM", f"${total_aum:,.0f}M")
-
-        # Key Insights
-        st.subheader("Key Insights")
-        
-        if not combined_df.empty:
-            avg_ret_by_strategy = combined_df.groupby("strategy")["return"].mean().sort_values(ascending=False)
-            top_strategy = avg_ret_by_strategy.index[0]
-            top_return = avg_ret_by_strategy.iloc[0]
-            
-            st.write(f"**Top Performing Strategy by Average Return:** {top_strategy} ({top_return:.2%})")
-
-        # Net Return Summary
-        if "net_return_usd" in combined_df.columns and not combined_df["net_return_usd"].isnull().all():
-            st.subheader("Net Return Summary (USD Millions)")
-            
+    
+    with tab2:
+        if 'aum' in df.columns and not df['aum'].isnull().all():
             col1, col2 = st.columns(2)
             
             with col1:
-                st.write("**By Strategy:**")
-                net_return_by_strategy = combined_df.groupby("strategy")["net_return_usd"].sum().sort_values(ascending=False)
-                for strategy, net_ret in net_return_by_strategy.items():
-                    st.write(f"- {strategy}: ${net_ret:,.2f}M")
+                st.write("**Largest Funds by AUM**")
+                large_funds = df.nlargest(10, 'aum')[['fund_name', 'aum', 'strategy']]
+                large_funds['aum'] = large_funds['aum'].apply(lambda x: f"${x:,.1f}M" if pd.notna(x) else "N/A")
+                st.dataframe(large_funds, use_container_width=True)
             
             with col2:
-                st.write("**By Fund:**")
-                net_return_by_fund = combined_df.groupby("fund_name")["net_return_usd"].sum().sort_values(ascending=False)
-                for fund, net_ret in net_return_by_fund.head(10).items():  # Show top 10
-                    st.write(f"- {fund}: ${net_ret:,.2f}M")
-
-        # Download Options
-        st.subheader("⬇️ Download Reports")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Excel download
-            excel_link = create_download_link(combined_df, "combined_fund_report.xlsx", "📊 Download Excel Report")
-            st.markdown(excel_link, unsafe_allow_html=True)
-        
-        with col2:
-            # Generate PDF report
-            if st.button("📄 Generate PDF Report"):
-                # Create PDF with all charts
-                pdf_buffer = BytesIO()
-                pdf = matplotlib.backends.backend_pdf.PdfPages(pdf_buffer)
-                
-                # Recreate all plots for PDF
-                plots_data = [
-                    ("Average Return by Fund", combined_df.groupby("fund_name")["return"].mean().sort_values(), "return", "Fund Name", "Average Return"),
-                    ("Average Return by Strategy", combined_df.groupby("strategy")["return"].mean().sort_values(), "return", "Strategy", "Average Return")
-                ]
-                
-                if "aum" in combined_df.columns and not combined_df["aum"].isnull().all():
-                    plots_data.extend([
-                        ("Total AUM by Strategy", combined_df.dropna(subset=["aum"]).groupby("strategy")["aum"].sum().sort_values(), "aum", "Strategy", "Total AUM (M USD)"),
-                        ("Total AUM by Fund", combined_df.dropna(subset=["aum"]).groupby("fund_name")["aum"].sum().sort_values(), "aum", "Fund Name", "Total AUM (M USD)")
-                    ])
-                
-                for title, data, data_type, ylabel, xlabel in plots_data:
-                    fig, ax = plt.subplots(figsize=(10, 8))
-                    bars = ax.barh(range(len(data)), data.values)
-                    ax.set_yticks(range(len(data)))
-                    ax.set_yticklabels(data.index)
-                    ax.set_xlabel(xlabel)
-                    ax.set_ylabel(ylabel)
-                    ax.set_title(title)
-                    
-                    # Add labels to bars
-                    for i, v in enumerate(data.values):
-                        if data_type == "return":
-                            ax.text(v + 0.0005, i, f"{v:.2%}", color='black', va='center')
-                        else:
-                            ax.text(v + 10, i, f"${v:,.0f}M", color='black', va='center')
-                    
-                    plt.tight_layout()
-                    pdf.savefig(fig)
-                    plt.close(fig)
-                
-                # Summary page
-                fig_text, ax = plt.subplots(figsize=(8.5, 11))
-                ax.axis('off')
-                
-                summary_text = [
-                    "Final Report Summary",
-                    "--------------------------------",
-                    f"Report Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}",
-                    f"Total Funds Analyzed: {combined_df['fund_name'].nunique()}",
-                    f"Total Strategies Analyzed: {combined_df['strategy'].nunique()}",
-                    "",
-                    "**Key Insights:**"
-                ]
-                
-                if not combined_df.empty:
-                    avg_ret_by_strategy = combined_df.groupby("strategy")["return"].mean().sort_values(ascending=False)
-                    top_strategy = avg_ret_by_strategy.index[0]
-                    top_return = avg_ret_by_strategy.iloc[0]
-                    summary_text.append(f"Top Performing Strategy by Avg Return: '{top_strategy}' ({top_return:.2%})")
-                
-                if "aum" in combined_df.columns and not combined_df['aum'].isnull().all():
-                    total_aum = combined_df['aum'].sum()
-                    summary_text.append(f"Total AUM Across All Funds: ${total_aum:,.0f}M")
-                
-                # Add text to the figure
-                y_pos = 0.9
-                for line in summary_text:
-                    ax.text(0.05, y_pos, line, fontsize=12, ha='left', va='top')
-                    y_pos -= 0.05
-                
+                st.write("**AUM by Strategy**")
+                aum_by_strategy = df.groupby('strategy')['aum'].sum().sort_values(ascending=False)
+                fig, ax = plt.subplots(figsize=(8, 6))
+                ax.bar(range(len(aum_by_strategy)), aum_by_strategy.values, color='orange')
+                ax.set_xticks(range(len(aum_by_strategy)))
+                ax.set_xticklabels(aum_by_strategy.index, rotation=45, ha='right')
+                ax.set_ylabel('Total AUM (M USD)')
+                ax.set_title('Total AUM by Strategy')
                 plt.tight_layout()
-                pdf.savefig(fig_text)
-                plt.close(fig_text)
-                
-                pdf.close()
-                pdf_bytes = pdf_buffer.getvalue()
-                pdf_buffer.close()
-                
-                # Create download link
-                pdf_link = create_pdf_download_link(pdf_bytes, "summary_report.pdf", "📄 Download PDF Report")
-                st.markdown(pdf_link, unsafe_allow_html=True)
-                st.success("PDF report generated successfully!")
+                st.pyplot(fig)
+                plt.close()
+    
+    with tab3:
+        if 'strategy' in df.columns and 'return' in df.columns:
+            strategy_stats = df.groupby('strategy').agg({
+                'return': ['mean', 'std', 'count'],
+                'aum': 'sum'
+            }).round(4)
+            
+            strategy_stats.columns = ['Avg Return', 'Return Std', 'Fund Count', 'Total AUM']
+            strategy_stats['Avg Return'] = strategy_stats['Avg Return'].apply(lambda x: f"{x:.2%}" if pd.notna(x) else "N/A")
+            strategy_stats['Return Std'] = strategy_stats['Return Std'].apply(lambda x: f"{x:.2%}" if pd.notna(x) else "N/A")
+            strategy_stats['Total AUM'] = strategy_stats['Total AUM'].apply(lambda x: f"${x:,.1f}M" if pd.notna(x) else "N/A")
+            
+            st.write("**Strategy Performance Summary**")
+            st.dataframe(strategy_stats, use_container_width=True)
+    
+    with tab4:
+        if 'return' in df.columns and not df['return'].isnull().all():
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Risk-Return Scatter
+                if 'aum' in df.columns:
+                    fig, ax = plt.subplots(figsize=(8, 6))
+                    scatter = ax.scatter(df['return'], df['aum'], alpha=0.6, s=50)
+                    ax.set_xlabel('Return')
+                    ax.set_ylabel('AUM (M USD)')
+                    ax.set_title('Risk-Return Profile')
+                    plt.tight_layout()
+                    st.pyplot(fig)
+                    plt.close()
+            
+            with col2:
+                # Performance metrics
+                returns_clean = df['return'].dropna()
+                if len(returns_clean) > 0:
+                    metrics = {
+                        'Average Return': f"{returns_clean.mean():.2%}",
+                        'Median Return': f"{returns_clean.median():.2%}",
+                        'Standard Deviation': f"{returns_clean.std():.2%}",
+                        'Best Performer': f"{returns_clean.max():.2%}",
+                        'Worst Performer': f"{returns_clean.min():.2%}"
+                    }
+                    
+                    st.write("**Portfolio Metrics**")
+                    for metric, value in metrics.items():
+                        st.metric(metric, value)
 
+def create_download_links(df: pd.DataFrame):
+    """Create download links for reports"""
+    st.subheader("⬇️ Download Reports")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        # Excel download
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Fund Analysis')
+            
+            # Add summary sheet
+            if 'strategy' in df.columns:
+                summary = df.groupby('strategy').agg({
+                    'return': ['mean', 'std', 'count'],
+                    'aum': 'sum'
+                }).round(4)
+                summary.to_excel(writer, sheet_name='Strategy Summary')
+        
+        excel_data = output.getvalue()
+        b64 = base64.b64encode(excel_data).decode()
+        href = f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}" download="fund_analysis.xlsx">📊 Download Excel Report</a>'
+        st.markdown(href, unsafe_allow_html=True)
+    
+    with col2:
+        # CSV download
+        csv_data = df.to_csv(index=False)
+        b64 = base64.b64encode(csv_data.encode()).decode()
+        href = f'<a href="data:text/csv;base64,{b64}" download="fund_data.csv">📋 Download CSV Data</a>'
+        st.markdown(href, unsafe_allow_html=True)
+    
+    with col3:
+        # JSON download
+        json_data = df.to_json(orient='records', indent=2)
+        b64 = base64.b64encode(json_data.encode()).decode()
+        href = f'<a href="data:application/json;base64,{b64}" download="fund_data.json">🔧 Download JSON Data</a>'
+        st.markdown(href, unsafe_allow_html=True)
+
+# Main application
+def main():
+    # Initialize Gemini model and cache
+    model = initialize_gemini()
+    cache = get_context_cache()
+    
+    # Sidebar for settings
+    with st.sidebar:
+        st.header("⚙️ Settings")
+        
+        # API usage info
+        st.info("💡 **Smart Context Caching**: The app caches AI analysis to minimize token usage and improve response times.")
+        
+        # Cache management
+        if st.button("🗑️ Clear Analysis Cache"):
+            cache.cache_store.clear()
+            st.success("Cache cleared!")
+        
+        # Display cache stats
+        st.write(f"**Cached Files:** {len(cache.cache_store)}")
+    
+    # File uploader
+    uploaded_files = st.file_uploader(
+        "Upload Fund Documents", 
+        accept_multiple_files=True,
+        type=['pdf', 'xlsx', 'xls', 'csv', 'txt'],
+        help="Supported formats: PDF, Excel, CSV, Text files"
+    )
+    
+    if uploaded_files:
+        st.write(f"📁 Processing {len(uploaded_files)} files...")
+        
+        # Process files with progress bar
+        all_dataframes = []
+        progress_bar = st.progress(0)
+        
+        for i, uploaded_file in enumerate(uploaded_files):
+            progress_bar.progress((i + 1) / len(uploaded_files))
+            
+            file_content = uploaded_file.read()
+            filename = uploaded_file.name
+            
+            # Extract text content
+            text_content = extract_text_content(file_content, filename)
+            
+            if text_content.strip():
+                # Use Gemini to extract fund data
+                df = extract_fund_data_with_gemini(model, text_content, filename, cache)
+                
+                if not df.empty:
+                    df = standardize_dataframe(df)
+                    df['source_file'] = filename  # Track source file
+                    all_dataframes.append(df)
+                else:
+                    st.warning(f"⚠️ No fund data extracted from {filename}")
+            else:
+                st.error(f"❌ Could not extract text from {filename}")
+        
+        progress_bar.empty()
+        
+        # Combine and analyze data
+        if all_dataframes:
+            combined_df = pd.concat(all_dataframes, ignore_index=True)
+            
+            # Display results
+            st.success(f"🎉 Successfully processed {len(all_dataframes)} files")
+            st.subheader("📋 Extracted Fund Data")
+            st.dataframe(combined_df, use_container_width=True)
+            
+            # Key metrics
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("Total Funds", len(combined_df))
+            
+            with col2:
+                if 'strategy' in combined_df.columns:
+                    st.metric("Strategies", combined_df['strategy'].nunique())
+            
+            with col3:
+                if 'aum' in combined_df.columns and not combined_df['aum'].isnull().all():
+                    total_aum = combined_df['aum'].sum()
+                    st.metric("Total AUM", f"${total_aum:,.0f}M")
+            
+            with col4:
+                if 'return' in combined_df.columns and not combined_df['return'].isnull().all():
+                    avg_return = combined_df['return'].mean()
+                    st.metric("Avg Return", f"{avg_return:.2%}")
+            
+            # Create visualizations
+            create_visualizations(combined_df)
+            
+            # Download options
+            create_download_links(combined_df)
+            
+        else:
+            st.error("❌ No valid fund data could be extracted from any of the uploaded files.")
+            st.info("💡 **Tips for better results:**\n- Ensure files contain fund performance data\n- Check that text is not image-based in PDFs\n- Verify data format is readable")
+    
     else:
-        st.warning("No valid data could be extracted from the uploaded files.")
-else:
-    st.info("Please upload PDF or Excel files to get started.")
+        # Welcome message and instructions
+        st.info("""
+        🚀 **Get Started:**
+        
+        1. **Upload Files**: Support for PDF, Excel, CSV, and text files
+        2. **AI Analysis**: Our AI will intelligently extract fund data regardless of format
+        3. **Smart Insights**: Get professional-grade analysis and visualizations
+        4. **Export Results**: Download comprehensive reports in multiple formats
+        
+        **What the AI can extract:**
+        - Fund names and performance returns
+        - Assets Under Management (AUM)
+        - Investment strategies
+        - Additional performance metrics
+        
+        **Built for analysts by analysts** - leveraging advanced AI to handle diverse document formats and complex data structures.
+        """)
+
+if __name__ == "__main__":
+    main()
