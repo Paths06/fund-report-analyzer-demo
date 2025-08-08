@@ -1322,7 +1322,155 @@ def main():
         - Performance metrics
         """)
     
-    # Enhanced welcome section with professional styling - FIXED VERSION
+    # Enhanced file uploader section (MAIN AREA - NOT SIDEBAR)
+    st.markdown("""
+    <div class="analysis-section">
+        <h2>📁 Upload Fund Documents</h2>
+        <p style="color: #90a4ae;">
+            Upload multiple files in any supported format. Our AI will intelligently extract and analyze fund performance data.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    uploaded_files = st.file_uploader(
+        "Choose files to analyze", 
+        accept_multiple_files=True,
+        type=['pdf', 'xlsx', 'xls', 'csv', 'txt'],
+        help="💡 Supported formats: PDF, Excel, CSV, Text files"
+    )
+    
+    if uploaded_files:
+        # Enhanced processing section
+        st.markdown(f"""
+        <div class="analysis-section">
+            <h3>🔄 Processing {len(uploaded_files)} Files</h3>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        all_dataframes = []
+        
+        # Enhanced progress tracking
+        progress_container = st.container()
+        with progress_container:
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+        
+        for i, uploaded_file in enumerate(uploaded_files):
+            progress = (i + 1) / len(uploaded_files)
+            progress_bar.progress(progress)
+            status_text.text(f"Processing {uploaded_file.name}... ({i+1}/{len(uploaded_files)})")
+            
+            file_content = uploaded_file.read()
+            filename = uploaded_file.name
+            
+            text_content = extract_text_content_enhanced(file_content, filename)
+            
+            if text_content.strip():
+                df = extract_fund_data_with_gemini_enhanced(model, text_content, filename, cache)
+                
+                if not df.empty:
+                    df = standardize_dataframe(df)
+                    df['source_file'] = filename
+                    all_dataframes.append(df)
+                else:
+                    st.warning(f"⚠️ No fund data extracted from {filename}")
+            else:
+                st.error(f"❌ Could not extract text from {filename}")
+        
+        progress_bar.empty()
+        status_text.empty()
+        
+        if all_dataframes:
+            combined_df = pd.concat(all_dataframes, ignore_index=True)
+            
+            # Enhanced success message
+            st.success(f"🎉 Successfully processed {len(all_dataframes)} files and extracted {len(combined_df)} fund records!")
+            
+            # Enhanced data display section
+            st.markdown("""
+            <div class="analysis-section">
+                <h2>📋 Extracted Fund Data</h2>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.dataframe(combined_df, use_container_width=True, height=400)
+            
+            # Enhanced key metrics with professional styling
+            st.markdown("""
+            <div class="analysis-section">
+                <h3>📊 Portfolio Overview</h3>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.markdown(f"""
+                <div class="metric-container">
+                    <div class="metric-label">Total Funds</div>
+                    <div class="metric-value">{len(combined_df)}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                if 'strategy' in combined_df.columns:
+                    strategies = combined_df['strategy'].nunique()
+                    st.markdown(f"""
+                    <div class="metric-container">
+                        <div class="metric-label">Strategies</div>
+                        <div class="metric-value">{strategies}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            with col3:
+                if 'aum' in combined_df.columns and not combined_df['aum'].isnull().all():
+                    total_aum = combined_df['aum'].sum()
+                    st.markdown(f"""
+                    <div class="metric-container">
+                        <div class="metric-label">Total AUM</div>
+                        <div class="metric-value">${total_aum:,.0f}M</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            with col4:
+                if 'return' in combined_df.columns and not combined_df['return'].isnull().all():
+                    avg_return = combined_df['return'].mean()
+                    color = "#4caf50" if avg_return > 0 else "#f44336"
+                    st.markdown(f"""
+                    <div class="metric-container">
+                        <div class="metric-label">Avg Return</div>
+                        <div class="metric-value" style="color: {color};">{avg_return:.2%}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            # Create enhanced visualizations
+            create_visualizations(combined_df)
+            
+            # Enhanced download options
+            create_download_links(combined_df)
+            
+        else:
+            st.error("❌ No valid fund data could be extracted from any of the uploaded files.")
+            
+            # Enhanced troubleshooting section
+            st.markdown("""
+            <div class="analysis-section">
+                <h3>🔧 Troubleshooting Tips</h3>
+                <div style="background: rgba(244, 67, 54, 0.1); border: 1px solid #f44336; border-radius: 8px; padding: 1rem; margin: 1rem 0;">
+                    <h4 style="color: #f44336; margin-top: 0;">💡 Tips for Better Results:</h4>
+                    <ul style="color: #e8eaed; line-height: 1.6;">
+                        <li><strong>Document Quality:</strong> Ensure files contain actual fund performance data</li>
+                        <li><strong>PDF Issues:</strong> Check that text is not image-based (try copying text from the PDF)</li>
+                        <li><strong>Data Format:</strong> Verify that data is in a readable table or structured format</li>
+                        <li><strong>File Size:</strong> Very large files may have extraction issues</li>
+                        <li><strong>Content Type:</strong> Marketing materials may have limited extractable data</li>
+                    </ul>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    else:
+        # Enhanced welcome section with professional styling - IN MAIN AREA
         st.markdown("""
         <div class="analysis-section">
             <h2>🚀 Welcome to AI-Powered Fund Analysis</h2>
@@ -1383,6 +1531,64 @@ def main():
                         <li>JSON for developers</li>
                     </ul>
                 </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Enhanced capabilities section
+        st.markdown("""
+        <div class="analysis-section">
+            <h3>🎯 What Our AI Can Extract</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin: 1rem 0;">
+                
+                <div style="background: rgba(66, 165, 245, 0.05); border-left: 4px solid #42a5f5; padding: 1rem; border-radius: 0 8px 8px 0;">
+                    <h4 style="color: #64b5f6; margin: 0 0 0.5rem 0;">📈 Performance Data</h4>
+                    <ul style="color: #b0bec5; margin: 0; font-size: 0.9rem;">
+                        <li>Weekly, monthly, quarterly returns</li>
+                        <li>YTD and since inception performance</li>
+                        <li>Absolute and percentage returns</li>
+                    </ul>
+                </div>
+                
+                <div style="background: rgba(76, 175, 80, 0.05); border-left: 4px solid #4caf50; padding: 1rem; border-radius: 0 8px 8px 0;">
+                    <h4 style="color: #66bb6a; margin: 0 0 0.5rem 0;">💰 Fund Information</h4>
+                    <ul style="color: #b0bec5; margin: 0; font-size: 0.9rem;">
+                        <li>Assets Under Management (AUM)</li>
+                        <li>Net Asset Value (NAV)</li>
+                        <li>Fund names and identifiers</li>
+                    </ul>
+                </div>
+                
+                <div style="background: rgba(255, 152, 0, 0.05); border-left: 4px solid #ff9800; padding: 1rem; border-radius: 0 8px 8px 0;">
+                    <h4 style="color: #ffa726; margin: 0 0 0.5rem 0;">🎯 Investment Strategies</h4>
+                    <ul style="color: #b0bec5; margin: 0; font-size: 0.9rem;">
+                        <li>Long/Short Equity, Credit, Macro</li>
+                        <li>Event-Driven, Quantitative</li>
+                        <li>Multi-Strategy classifications</li>
+                    </ul>
+                </div>
+                
+                <div style="background: rgba(156, 39, 176, 0.05); border-left: 4px solid #9c27b0; padding: 1rem; border-radius: 0 8px 8px 0;">
+                    <h4 style="color: #ab47bc; margin: 0 0 0.5rem 0;">📊 Additional Metrics</h4>
+                    <ul style="color: #b0bec5; margin: 0; font-size: 0.9rem;">
+                        <li>Risk metrics and volatility</li>
+                        <li>Sharpe ratios and drawdowns</li>
+                        <li>Benchmark comparisons</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Call to action with enhanced styling
+        st.markdown("""
+        <div style="text-align: center; margin: 3rem 0; padding: 2rem; background: linear-gradient(135deg, rgba(66, 165, 245, 0.1), rgba(33, 150, 243, 0.1)); border-radius: 12px; border: 1px solid rgba(66, 165, 245, 0.3);">
+            <h3 style="color: #64b5f6; margin-bottom: 1rem;">Ready to Get Started?</h3>
+            <p style="color: #b0bec5; font-size: 1.1rem; margin-bottom: 1.5rem;">
+                Upload your fund documents above and let our AI do the heavy lifting.
+            </p>
+            <div style="color: #90a4ae; font-size: 0.9rem;">
+                <strong>Built for analysts by analysts</strong> • Powered by advanced AI • Professional-grade results
             </div>
         </div>
         """, unsafe_allow_html=True)
