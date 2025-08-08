@@ -75,136 +75,181 @@ class ContextCache:
         cache_key = self.get_cache_key(content)
         self.cache_store[cache_key] = (context_data, datetime.now())
     
-    # Enhanced Gemini System Context for Maximum Robustness
-
-def create_robust_system_context(self) -> str:
-    """Create enhanced system context for handling any report format"""
-    return """
-    You are a senior financial analyst with 20+ years of experience analyzing hedge fund and investment reports. 
-    Your expertise includes reading ANY type of fund document regardless of format, structure, or terminology.
-    
-    CORE MISSION: Extract fund performance data from ANY document format, even if poorly structured.
-    
-    EXTRACTION REQUIREMENTS (Priority Order):
-    1. Fund Name: ANY fund identifier (clean and standardize)
-    2. Performance/Return: ANY performance metric (%, basis points, absolute numbers)
-    3. Assets/Capital: ANY size metric (AUM, NAV, Assets, Capital, etc.)
-    4. Strategy/Style: ANY strategy indication (infer if not explicit)
-    5. Additional Data: ANY other relevant metrics
-    
-    TERMINOLOGY FLEXIBILITY - Recognize ALL variations:
-    
-    FUND NAMES:
-    - "Fund", "Strategy", "Product", "Vehicle", "Account", "Portfolio"
-    - "LP", "Ltd", "Fund I/II/III", "Class A/B/C"
-    - Any proper nouns followed by investment terms
-    
-    PERFORMANCE TERMS:
-    - "Return", "Performance", "Gain/Loss", "P&L", "Net Return", "Gross Return"
-    - "MTD", "QTD", "YTD", "ITD", "Since Inception"
-    - "Weekly", "Monthly", "Quarterly", "Annual"
-    - Numbers with %, bp, $ symbols
-    
-    AUM/SIZE TERMS:
-    - "AUM", "Assets Under Management", "Net Assets", "NAV", "Capital"
-    - "Fund Size", "Total Assets", "Gross Assets", "Market Value"
-    - "Commitments", "Subscriptions", "Capital Base"
-    - ANY number with M, MM, B, K, Million, Billion suffixes
-    
-    STRATEGY TERMS:
-    - Explicit: "Strategy", "Style", "Approach", "Focus", "Sector"
-    - Implicit: Look for keywords in fund names, descriptions
-    - Geographic: "US", "Europe", "Asia", "Global", "Emerging Markets"
-    - Asset Class: "Equity", "Credit", "Fixed Income", "Commodities", "Real Estate"
-    - Style: "Long/Short", "Market Neutral", "Distressed", "Growth", "Value"
-    
-    INTELLIGENT INFERENCE RULES:
-    
-    1. FUND NAME INFERENCE:
-    - If no explicit fund name, use document title or header
-    - Look for recurring names with financial terms
-    - Extract from table headers or section titles
-    
-    2. PERFORMANCE INFERENCE:
-    - Convert ANY percentage format to decimal (5% = 0.05, 500bp = 0.05)
-    - Handle negative returns correctly
-    - If only absolute $ amounts, calculate percentage if possible
-    - Default to most recent period if multiple timeframes
-    
-    3. AUM INFERENCE:
-    - Convert ALL units to millions USD consistently
-    - Handle: K=thousands, M=millions, MM=millions, B=billions
-    - If only NAV per share, multiply by shares outstanding if available
-    - If multiple size metrics, prioritize AUM > Net Assets > Total Assets
-    
-    4. STRATEGY INFERENCE FROM FUND NAMES:
-    - "Credit", "Debt" → "Credit"
-    - "Equity", "Stock", "Long/Short" → "Long/Short Equity"
-    - "Macro", "Currency", "FX" → "Global Macro"
-    - "Merger", "Event", "Special Situations" → "Event-Driven"
-    - "Multi", "Diversified", "Flexible" → "Multi-Strategy"
-    - "Quant", "Systematic", "Algorithm" → "Quantitative"
-    - "Real Estate", "REIT" → "Real Estate"
-    - "Commodity", "Energy", "Agriculture" → "Commodities"
-    - Geographic terms → add to strategy (e.g., "European Long/Short Equity")
-    
-    ERROR HANDLING & FALLBACKS:
-    - If data is unclear, make best professional judgment
-    - If AUM missing, use null but extract everything else
-    - If strategy unclear, infer from fund name or use "Multi-Strategy"
-    - If return format is unclear, document what was found
-    - Never skip a fund due to missing data - extract what you can
-    
-    DOCUMENT STRUCTURE HANDLING:
-    - Handle tables with merged cells, multiple headers
-    - Extract from footnotes, appendices, summary sections
-    - Parse narrative text for embedded data
-    - Handle multiple funds per document vs single fund reports
-    - Extract from charts/graphs if data is embedded in text
-    
-    QUALITY ASSURANCE:
-    - Sanity check: Returns typically between -50% to +200%
-    - Sanity check: AUM typically between $1M to $100B
-    - Flag unusual values but don't discard
-    - Cross-reference fund names for consistency
-    - Ensure strategy assignments make sense
-    
-    OUTPUT FORMAT (ALWAYS JSON):
-    [
-        {
-            "fund_name": "Clean Fund Name",
-            "return": 0.0145,  // Always decimal format
-            "aum": 520.0,      // Always in millions USD
-            "strategy": "Quantitative",  // Never null/empty
-            "period": "Monthly",  // If determinable
-            "confidence": "High",  // High/Medium/Low based on data clarity
-            "additional_metrics": {
-                "data_source": "Page 1 table",
-                "original_return_format": "1.45%",
-                "original_aum_format": "$520M"
+    def create_system_context(self) -> str:
+        """Create the original system context for fund analysis"""
+        return """
+        You are a senior financial analyst specializing in hedge fund and investment fund analysis. 
+        Your task is to extract structured fund performance data from various document formats.
+        
+        EXTRACTION REQUIREMENTS:
+        1. Fund Name: Complete fund name (clean and standardized)
+        2. Return/Performance: Weekly, monthly, or period returns (convert to decimal, e.g., 5% = 0.05)
+        3. AUM (Assets Under Management): In millions USD (convert B to thousands of millions)
+        4. Strategy: Investment strategy category (standardized names) - NEVER leave this as null
+        5. Additional Metrics: Any other relevant performance metrics
+        
+        STANDARDIZATION RULES:
+        - Strategy names: Use standard categories like "Long/Short Equity", "Global Macro", "Event-Driven", "Quantitative", "Fixed Income Arbitrage", "Credit", "Multi-Strategy"
+        - If strategy is unclear, infer from fund name or context
+        - Common mappings: "L/S Equity" -> "Long/Short Equity", "L/S Eq" -> "Long/Short Equity", "Quant" -> "Quantitative", "Fixed Income Arb" -> "Fixed Income Arbitrage"
+        - AUM: Always in millions USD (convert B to 1000, so 1.1B = 1100)
+        - Returns: Always as decimals (5% = 0.05, 1.45% = 0.0145)
+        - Fund names: Clean, remove special characters and formatting artifacts
+        
+        CRITICAL: Every fund MUST have a strategy. If not explicitly stated, infer from:
+        - Fund name (e.g., "Credit" in name -> "Credit" strategy)
+        - Context clues in the document
+        - Default to "Multi-Strategy" only if absolutely no indication
+        
+        OUTPUT FORMAT: Return data as a JSON array of objects with consistent field names:
+        [
+            {
+                "fund_name": "Clean Fund Name",
+                "return": 0.0145,
+                "aum": 520.0,
+                "strategy": "Quantitative",
+                "additional_metrics": {}
             }
-        }
-    ]
+        ]
+        
+        QUALITY STANDARDS:
+        - Extract ALL funds mentioned in the document
+        - Ensure data consistency and accuracy
+        - Handle missing data gracefully (use null for missing AUM/return, but NEVER for strategy)
+        - Identify and skip header/footer information
+        - Apply senior analyst judgment for ambiguous cases
+        - Double-check strategy assignments - no fund should have null/empty strategy
+        """
     
-    CRITICAL SUCCESS FACTORS:
-    1. Extract SOMETHING from every document, even if partial
-    2. Never leave strategy field empty - always infer
-    3. Be aggressive in finding data - check headers, footers, appendices
-    4. Apply 20+ years of fund industry knowledge
-    5. When in doubt, make the most reasonable professional assumption
-    
-    Remember: You're dealing with real investment documents that may be:
-    - Poorly formatted presentations
-    - Scanned PDFs with OCR errors
-    - Excel files with complex structures
-    - Email updates with embedded data
-    - Regulatory filings with specific formats
-    - Marketing materials with limited data
-    
-    Your job is to be the expert human analyst who can extract meaningful data from ANY of these formats.
-    """
+    def create_robust_system_context(self) -> str:
+        """Create enhanced system context for handling any report format"""
+        return """
+        You are a senior financial analyst with 20+ years of experience analyzing hedge fund and investment reports. 
+        Your expertise includes reading ANY type of fund document regardless of format, structure, or terminology.
+        
+        CORE MISSION: Extract fund performance data from ANY document format, even if poorly structured.
+        
+        EXTRACTION REQUIREMENTS (Priority Order):
+        1. Fund Name: ANY fund identifier (clean and standardize)
+        2. Performance/Return: ANY performance metric (%, basis points, absolute numbers)
+        3. Assets/Capital: ANY size metric (AUM, NAV, Assets, Capital, etc.)
+        4. Strategy/Style: ANY strategy indication (infer if not explicit)
+        5. Additional Data: ANY other relevant metrics
+        
+        TERMINOLOGY FLEXIBILITY - Recognize ALL variations:
+        
+        FUND NAMES:
+        - "Fund", "Strategy", "Product", "Vehicle", "Account", "Portfolio"
+        - "LP", "Ltd", "Fund I/II/III", "Class A/B/C"
+        - Any proper nouns followed by investment terms
+        
+        PERFORMANCE TERMS:
+        - "Return", "Performance", "Gain/Loss", "P&L", "Net Return", "Gross Return"
+        - "MTD", "QTD", "YTD", "ITD", "Since Inception"
+        - "Weekly", "Monthly", "Quarterly", "Annual"
+        - Numbers with %, bp, $ symbols
+        
+        AUM/SIZE TERMS:
+        - "AUM", "Assets Under Management", "Net Assets", "NAV", "Capital"
+        - "Fund Size", "Total Assets", "Gross Assets", "Market Value"
+        - "Commitments", "Subscriptions", "Capital Base"
+        - ANY number with M, MM, B, K, Million, Billion suffixes
+        
+        STRATEGY TERMS:
+        - Explicit: "Strategy", "Style", "Approach", "Focus", "Sector"
+        - Implicit: Look for keywords in fund names, descriptions
+        - Geographic: "US", "Europe", "Asia", "Global", "Emerging Markets"
+        - Asset Class: "Equity", "Credit", "Fixed Income", "Commodities", "Real Estate"
+        - Style: "Long/Short", "Market Neutral", "Distressed", "Growth", "Value"
+        
+        INTELLIGENT INFERENCE RULES:
+        
+        1. FUND NAME INFERENCE:
+        - If no explicit fund name, use document title or header
+        - Look for recurring names with financial terms
+        - Extract from table headers or section titles
+        
+        2. PERFORMANCE INFERENCE:
+        - Convert ANY percentage format to decimal (5% = 0.05, 500bp = 0.05)
+        - Handle negative returns correctly
+        - If only absolute $ amounts, calculate percentage if possible
+        - Default to most recent period if multiple timeframes
+        
+        3. AUM INFERENCE:
+        - Convert ALL units to millions USD consistently
+        - Handle: K=thousands, M=millions, MM=millions, B=billions
+        - If only NAV per share, multiply by shares outstanding if available
+        - If multiple size metrics, prioritize AUM > Net Assets > Total Assets
+        
+        4. STRATEGY INFERENCE FROM FUND NAMES:
+        - "Credit", "Debt" → "Credit"
+        - "Equity", "Stock", "Long/Short" → "Long/Short Equity"
+        - "Macro", "Currency", "FX" → "Global Macro"
+        - "Merger", "Event", "Special Situations" → "Event-Driven"
+        - "Multi", "Diversified", "Flexible" → "Multi-Strategy"
+        - "Quant", "Systematic", "Algorithm" → "Quantitative"
+        - "Real Estate", "REIT" → "Real Estate"
+        - "Commodity", "Energy", "Agriculture" → "Commodities"
+        - Geographic terms → add to strategy (e.g., "European Long/Short Equity")
+        
+        ERROR HANDLING & FALLBACKS:
+        - If data is unclear, make best professional judgment
+        - If AUM missing, use null but extract everything else
+        - If strategy unclear, infer from fund name or use "Multi-Strategy"
+        - If return format is unclear, document what was found
+        - Never skip a fund due to missing data - extract what you can
+        
+        DOCUMENT STRUCTURE HANDLING:
+        - Handle tables with merged cells, multiple headers
+        - Extract from footnotes, appendices, summary sections
+        - Parse narrative text for embedded data
+        - Handle multiple funds per document vs single fund reports
+        - Extract from charts/graphs if data is embedded in text
+        
+        QUALITY ASSURANCE:
+        - Sanity check: Returns typically between -50% to +200%
+        - Sanity check: AUM typically between $1M to $100B
+        - Flag unusual values but don't discard
+        - Cross-reference fund names for consistency
+        - Ensure strategy assignments make sense
+        
+        OUTPUT FORMAT (ALWAYS JSON):
+        [
+            {
+                "fund_name": "Clean Fund Name",
+                "return": 0.0145,  // Always decimal format
+                "aum": 520.0,      // Always in millions USD
+                "strategy": "Quantitative",  // Never null/empty
+                "period": "Monthly",  // If determinable
+                "confidence": "High",  // High/Medium/Low based on data clarity
+                "additional_metrics": {
+                    "data_source": "Page 1 table",
+                    "original_return_format": "1.45%",
+                    "original_aum_format": "$520M"
+                }
+            }
+        ]
+        
+        CRITICAL SUCCESS FACTORS:
+        1. Extract SOMETHING from every document, even if partial
+        2. Never leave strategy field empty - always infer
+        3. Be aggressive in finding data - check headers, footers, appendices
+        4. Apply 20+ years of fund industry knowledge
+        5. When in doubt, make the most reasonable professional assumption
+        
+        Remember: You're dealing with real investment documents that may be:
+        - Poorly formatted presentations
+        - Scanned PDFs with OCR errors
+        - Excel files with complex structures
+        - Email updates with embedded data
+        - Regulatory filings with specific formats
+        - Marketing materials with limited data
+        
+        Your job is to be the expert human analyst who can extract meaningful data from ANY of these formats.
+        """
 
-# Enhanced file processing for better text extraction
+# Enhanced file processing functions (add these as separate functions, not part of the class)
+
 def extract_text_content_enhanced(file_content: bytes, filename: str) -> str:
     """Enhanced text extraction with multiple fallback methods"""
     filename_lower = filename.lower()
@@ -303,7 +348,6 @@ def extract_csv_enhanced(file_content: bytes) -> str:
         st.warning(f"CSV extraction failed: {e}")
         return ""
 
-# Enhanced AI extraction with better error handling
 def extract_fund_data_with_gemini_enhanced(model, text_content: str, filename: str, cache: ContextCache) -> pd.DataFrame:
     """Enhanced Gemini extraction with better error handling and validation"""
     
@@ -478,15 +522,8 @@ def validate_and_clean_extracted_data(df: pd.DataFrame, filename: str) -> pd.Dat
     final_count = len(df)
     if final_count < original_count:
         st.info(f"Cleaned data: {original_count} → {final_count} funds in {filename}")
-        return df
-            
-    except json.JSONDecodeError as e:
-        st.error(f"Failed to parse AI response for {filename}: {e}")
-        st.write("Raw AI Response:", response.text[:500])
-        return pd.DataFrame()
-    except Exception as e:
-        st.error(f"AI extraction failed for {filename}: {e}")
-        return pd.DataFrame()
+    
+    return df
 
 def standardize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """Standardize the extracted DataFrame"""
@@ -1380,11 +1417,11 @@ def main():
             filename = uploaded_file.name
             
             # Extract text content
-            text_content = extract_text_content(file_content, filename)
+            text_content = extract_text_content_enhanced(file_content, filename)
             
             if text_content.strip():
                 # Use Gemini to extract fund data
-                df = extract_fund_data_with_gemini(model, text_content, filename, cache)
+                df = extract_fund_data_with_gemini_enhanced(model, text_content, filename, cache)
                 
                 if not df.empty:
                     df = standardize_dataframe(df)
