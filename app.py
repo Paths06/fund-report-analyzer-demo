@@ -415,7 +415,7 @@ def extract_fund_data_with_gemini_enhanced(model, text_content: str, filename: s
                 cleaned = response_text.replace("Here's the extracted data:", "")
                 cleaned = cleaned.replace("Based on the document:", "")
                 # Look for JSON-like structures
-                import re
+                # import re
                 json_pattern = r'\[.*?\]'
                 matches = re.findall(json_pattern, cleaned, re.DOTALL)
                 if matches:
