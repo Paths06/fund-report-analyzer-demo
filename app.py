@@ -496,7 +496,7 @@ class ContextCache:
         """
 # Enhanced file processing functions with dark theme status updates
 
-    def extract_text_content_enhanced(file_content: bytes, filename: str) -> str:
+def extract_text_content_enhanced(file_content: bytes, filename: str) -> str:
         """Enhanced text extraction with multiple fallback methods"""
         filename_lower = filename.lower()
         
@@ -532,7 +532,7 @@ class ContextCache:
         
         return text_content
 
-    def extract_pdf_with_fallbacks(file_content: bytes) -> str:
+def extract_pdf_with_fallbacks(file_content: bytes) -> str:
         """Enhanced PDF extraction with multiple methods"""
         text = ""
         
@@ -548,7 +548,7 @@ class ContextCache:
         
         return text
 
-    def extract_excel_enhanced(file_content: bytes, filename: str) -> str:
+def extract_excel_enhanced(file_content: bytes, filename: str) -> str:
         """Enhanced Excel extraction handling complex structures"""
         try:
             excel_data = pd.read_excel(BytesIO(file_content), sheet_name=None, header=None)
@@ -573,7 +573,7 @@ class ContextCache:
             except:
                 return ""
 
-    def extract_csv_enhanced(file_content: bytes) -> str:
+def extract_csv_enhanced(file_content: bytes) -> str:
         """Enhanced CSV extraction with encoding detection"""
         try:
             for encoding in ['utf-8', 'latin-1', 'cp1252', 'utf-16']:
@@ -590,7 +590,7 @@ class ContextCache:
             st.warning(f"⚠️ CSV extraction failed: {e}")
             return ""
 
-    def extract_fund_data_with_gemini_enhanced(model, text_content: str, filename: str, cache: ContextCache) -> pd.DataFrame:
+def extract_fund_data_with_gemini_enhanced(model, text_content: str, filename: str, cache: ContextCache) -> pd.DataFrame:
         """Enhanced Gemini extraction with better error handling and validation"""
         
         # Check cache first with enhanced UI
@@ -736,7 +736,7 @@ class ContextCache:
             
             return pd.DataFrame()
 
-    def validate_and_clean_extracted_data(df: pd.DataFrame, filename: str) -> pd.DataFrame:
+def validate_and_clean_extracted_data(df: pd.DataFrame, filename: str) -> pd.DataFrame:
         """Validate and clean extracted fund data with enhanced reporting"""
         
         if df.empty:
@@ -793,7 +793,7 @@ class ContextCache:
         
         return df
 
-    def standardize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+def standardize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         """Standardize the extracted DataFrame with enhanced validation"""
         if df.empty:
             return df
