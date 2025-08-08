@@ -1334,4 +1334,4 @@ def generate_executive_summary_pdf(df: pd.DataFrame) -> bytes:
         
         fig.text(0.1, 0.91, f'Report Date: {report_date}', fontsize=10)
         fig.text(0.5, 0.91, f'Portfolio: {total_funds} Funds | {total_strategies} Strategies', 
-                fontsize=10
+                fontsize=10)
