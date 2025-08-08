@@ -478,8 +478,7 @@ def validate_and_clean_extracted_data(df: pd.DataFrame, filename: str) -> pd.Dat
     final_count = len(df)
     if final_count < original_count:
         st.info(f"Cleaned data: {original_count} → {final_count} funds in {filename}")
-    
-    return df
+        return df
             
     except json.JSONDecodeError as e:
         st.error(f"Failed to parse AI response for {filename}: {e}")
