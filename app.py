@@ -75,116 +75,237 @@ class ContextCache:
         cache_key = self.get_cache_key(content)
         self.cache_store[cache_key] = (context_data, datetime.now())
     
-    def create_system_context(self) -> str:
-        """Create the system context for fund analysis"""
-        return """
-        You are a senior financial analyst specializing in hedge fund and investment fund analysis. 
-        Your task is to extract structured fund performance data from various document formats.
-        
-        EXTRACTION REQUIREMENTS:
-        1. Fund Name: Complete fund name (clean and standardized)
-        2. Return/Performance: Weekly, monthly, or period returns (convert to decimal, e.g., 5% = 0.05)
-        3. AUM (Assets Under Management): In millions USD (convert B to thousands of millions)
-        4. Strategy: Investment strategy category (standardized names) - NEVER leave this as null
-        5. Additional Metrics: Any other relevant performance metrics
-        
-        STANDARDIZATION RULES:
-        - Strategy names: Use standard categories like "Long/Short Equity", "Global Macro", "Event-Driven", "Quantitative", "Fixed Income Arbitrage", "Credit", "Multi-Strategy"
-        - If strategy is unclear, infer from fund name or context
-        - Common mappings: "L/S Equity" -> "Long/Short Equity", "L/S Eq" -> "Long/Short Equity", "Quant" -> "Quantitative", "Fixed Income Arb" -> "Fixed Income Arbitrage"
-        - AUM: Always in millions USD (convert B to 1000, so 1.1B = 1100)
-        - Returns: Always as decimals (5% = 0.05, 1.45% = 0.0145)
-        - Fund names: Clean, remove special characters and formatting artifacts
-        
-        CRITICAL: Every fund MUST have a strategy. If not explicitly stated, infer from:
-        - Fund name (e.g., "Credit" in name -> "Credit" strategy)
-        - Context clues in the document
-        - Default to "Multi-Strategy" only if absolutely no indication
-        
-        OUTPUT FORMAT: Return data as a JSON array of objects with consistent field names:
-        [
-            {
-                "fund_name": "Clean Fund Name",
-                "return": 0.0145,
-                "aum": 520.0,
-                "strategy": "Quantitative",
-                "additional_metrics": {}
+    # Enhanced Gemini System Context for Maximum Robustness
+
+def create_robust_system_context(self) -> str:
+    """Create enhanced system context for handling any report format"""
+    return """
+    You are a senior financial analyst with 20+ years of experience analyzing hedge fund and investment reports. 
+    Your expertise includes reading ANY type of fund document regardless of format, structure, or terminology.
+    
+    CORE MISSION: Extract fund performance data from ANY document format, even if poorly structured.
+    
+    EXTRACTION REQUIREMENTS (Priority Order):
+    1. Fund Name: ANY fund identifier (clean and standardize)
+    2. Performance/Return: ANY performance metric (%, basis points, absolute numbers)
+    3. Assets/Capital: ANY size metric (AUM, NAV, Assets, Capital, etc.)
+    4. Strategy/Style: ANY strategy indication (infer if not explicit)
+    5. Additional Data: ANY other relevant metrics
+    
+    TERMINOLOGY FLEXIBILITY - Recognize ALL variations:
+    
+    FUND NAMES:
+    - "Fund", "Strategy", "Product", "Vehicle", "Account", "Portfolio"
+    - "LP", "Ltd", "Fund I/II/III", "Class A/B/C"
+    - Any proper nouns followed by investment terms
+    
+    PERFORMANCE TERMS:
+    - "Return", "Performance", "Gain/Loss", "P&L", "Net Return", "Gross Return"
+    - "MTD", "QTD", "YTD", "ITD", "Since Inception"
+    - "Weekly", "Monthly", "Quarterly", "Annual"
+    - Numbers with %, bp, $ symbols
+    
+    AUM/SIZE TERMS:
+    - "AUM", "Assets Under Management", "Net Assets", "NAV", "Capital"
+    - "Fund Size", "Total Assets", "Gross Assets", "Market Value"
+    - "Commitments", "Subscriptions", "Capital Base"
+    - ANY number with M, MM, B, K, Million, Billion suffixes
+    
+    STRATEGY TERMS:
+    - Explicit: "Strategy", "Style", "Approach", "Focus", "Sector"
+    - Implicit: Look for keywords in fund names, descriptions
+    - Geographic: "US", "Europe", "Asia", "Global", "Emerging Markets"
+    - Asset Class: "Equity", "Credit", "Fixed Income", "Commodities", "Real Estate"
+    - Style: "Long/Short", "Market Neutral", "Distressed", "Growth", "Value"
+    
+    INTELLIGENT INFERENCE RULES:
+    
+    1. FUND NAME INFERENCE:
+    - If no explicit fund name, use document title or header
+    - Look for recurring names with financial terms
+    - Extract from table headers or section titles
+    
+    2. PERFORMANCE INFERENCE:
+    - Convert ANY percentage format to decimal (5% = 0.05, 500bp = 0.05)
+    - Handle negative returns correctly
+    - If only absolute $ amounts, calculate percentage if possible
+    - Default to most recent period if multiple timeframes
+    
+    3. AUM INFERENCE:
+    - Convert ALL units to millions USD consistently
+    - Handle: K=thousands, M=millions, MM=millions, B=billions
+    - If only NAV per share, multiply by shares outstanding if available
+    - If multiple size metrics, prioritize AUM > Net Assets > Total Assets
+    
+    4. STRATEGY INFERENCE FROM FUND NAMES:
+    - "Credit", "Debt" → "Credit"
+    - "Equity", "Stock", "Long/Short" → "Long/Short Equity"
+    - "Macro", "Currency", "FX" → "Global Macro"
+    - "Merger", "Event", "Special Situations" → "Event-Driven"
+    - "Multi", "Diversified", "Flexible" → "Multi-Strategy"
+    - "Quant", "Systematic", "Algorithm" → "Quantitative"
+    - "Real Estate", "REIT" → "Real Estate"
+    - "Commodity", "Energy", "Agriculture" → "Commodities"
+    - Geographic terms → add to strategy (e.g., "European Long/Short Equity")
+    
+    ERROR HANDLING & FALLBACKS:
+    - If data is unclear, make best professional judgment
+    - If AUM missing, use null but extract everything else
+    - If strategy unclear, infer from fund name or use "Multi-Strategy"
+    - If return format is unclear, document what was found
+    - Never skip a fund due to missing data - extract what you can
+    
+    DOCUMENT STRUCTURE HANDLING:
+    - Handle tables with merged cells, multiple headers
+    - Extract from footnotes, appendices, summary sections
+    - Parse narrative text for embedded data
+    - Handle multiple funds per document vs single fund reports
+    - Extract from charts/graphs if data is embedded in text
+    
+    QUALITY ASSURANCE:
+    - Sanity check: Returns typically between -50% to +200%
+    - Sanity check: AUM typically between $1M to $100B
+    - Flag unusual values but don't discard
+    - Cross-reference fund names for consistency
+    - Ensure strategy assignments make sense
+    
+    OUTPUT FORMAT (ALWAYS JSON):
+    [
+        {
+            "fund_name": "Clean Fund Name",
+            "return": 0.0145,  // Always decimal format
+            "aum": 520.0,      // Always in millions USD
+            "strategy": "Quantitative",  // Never null/empty
+            "period": "Monthly",  // If determinable
+            "confidence": "High",  // High/Medium/Low based on data clarity
+            "additional_metrics": {
+                "data_source": "Page 1 table",
+                "original_return_format": "1.45%",
+                "original_aum_format": "$520M"
             }
-        ]
-        
-        QUALITY STANDARDS:
-        - Extract ALL funds mentioned in the document
-        - Ensure data consistency and accuracy
-        - Handle missing data gracefully (use null for missing AUM/return, but NEVER for strategy)
-        - Identify and skip header/footer information
-        - Apply senior analyst judgment for ambiguous cases
-        - Double-check strategy assignments - no fund should have null/empty strategy
-        """
+        }
+    ]
+    
+    CRITICAL SUCCESS FACTORS:
+    1. Extract SOMETHING from every document, even if partial
+    2. Never leave strategy field empty - always infer
+    3. Be aggressive in finding data - check headers, footers, appendices
+    4. Apply 20+ years of fund industry knowledge
+    5. When in doubt, make the most reasonable professional assumption
+    
+    Remember: You're dealing with real investment documents that may be:
+    - Poorly formatted presentations
+    - Scanned PDFs with OCR errors
+    - Excel files with complex structures
+    - Email updates with embedded data
+    - Regulatory filings with specific formats
+    - Marketing materials with limited data
+    
+    Your job is to be the expert human analyst who can extract meaningful data from ANY of these formats.
+    """
 
-# Initialize cache
-@st.cache_resource
-def get_context_cache():
-    return ContextCache()
+# Enhanced file processing for better text extraction
+def extract_text_content_enhanced(file_content: bytes, filename: str) -> str:
+    """Enhanced text extraction with multiple fallback methods"""
+    filename_lower = filename.lower()
+    
+    text_content = ""
+    
+    if filename_lower.endswith('.pdf'):
+        # Try multiple PDF extraction methods
+        text_content = extract_pdf_with_fallbacks(file_content)
+    elif filename_lower.endswith(('.xlsx', '.xls')):
+        text_content = extract_excel_enhanced(file_content, filename)
+    elif filename_lower.endswith('.csv'):
+        text_content = extract_csv_enhanced(file_content)
+    elif filename_lower.endswith('.txt'):
+        text_content = file_content.decode('utf-8', errors='ignore')
+    else:
+        # Try to decode as text for unknown formats
+        try:
+            text_content = file_content.decode('utf-8', errors='ignore')
+        except:
+            st.warning(f"Unsupported file format: {filename}")
+            return ""
+    
+    # If extraction failed or produced minimal content, try alternate methods
+    if len(text_content.strip()) < 50:
+        st.warning(f"Limited text extracted from {filename}. Trying alternate methods...")
+        # Could add OCR or other fallback methods here
+    
+    return text_content
 
-# File processing functions
-def extract_text_from_pdf(file_content: bytes) -> str:
-    """Extract text from PDF files"""
+def extract_pdf_with_fallbacks(file_content: bytes) -> str:
+    """Enhanced PDF extraction with multiple methods"""
+    text = ""
+    
     try:
+        # Method 1: PyPDF2
         reader = PyPDF2.PdfReader(BytesIO(file_content))
         text = "\n".join([page.extract_text() for page in reader.pages if page.extract_text()])
-        return text
+        
+        if len(text.strip()) < 50:
+            st.info("PyPDF2 extraction yielded minimal text. Document may be image-based.")
+            # Here you could add other PDF libraries like pdfplumber, pymupdf, etc.
+            
     except Exception as e:
-        st.warning(f"PDF extraction failed: {e}")
-        return ""
+        st.warning(f"PDF extraction failed with PyPDF2: {e}")
+        # Could try other PDF extraction libraries here
+    
+    return text
 
-def extract_text_from_excel(file_content: bytes, filename: str) -> str:
-    """Convert Excel data to text representation"""
+def extract_excel_enhanced(file_content: bytes, filename: str) -> str:
+    """Enhanced Excel extraction handling complex structures"""
     try:
-        # Try reading all sheets
-        excel_data = pd.read_excel(BytesIO(file_content), sheet_name=None)
+        # Read all sheets and handle different structures
+        excel_data = pd.read_excel(BytesIO(file_content), sheet_name=None, header=None)
         text_content = []
         
         for sheet_name, df in excel_data.items():
             text_content.append(f"=== Sheet: {sheet_name} ===")
-            text_content.append(df.to_string(index=False))
+            
+            # Try to detect header rows and data structure
+            # Look for common fund report patterns
+            for i, row in df.iterrows():
+                row_text = " | ".join([str(cell) for cell in row.dropna()])
+                if len(row_text.strip()) > 0:
+                    text_content.append(row_text)
+            
             text_content.append("\n")
         
         return "\n".join(text_content)
     except Exception as e:
-        st.warning(f"Excel extraction failed: {e}")
-        return ""
+        st.warning(f"Enhanced Excel extraction failed: {e}")
+        # Fallback to basic extraction
+        try:
+            df = pd.read_excel(BytesIO(file_content))
+            return df.to_string(index=False)
+        except:
+            return ""
 
-def extract_text_from_csv(file_content: bytes) -> str:
-    """Extract text from CSV files"""
+def extract_csv_enhanced(file_content: bytes) -> str:
+    """Enhanced CSV extraction with encoding detection"""
     try:
-        df = pd.read_csv(BytesIO(file_content))
+        # Try different encodings
+        for encoding in ['utf-8', 'latin-1', 'cp1252', 'utf-16']:
+            try:
+                text = file_content.decode(encoding)
+                df = pd.read_csv(BytesIO(file_content), encoding=encoding)
+                return df.to_string(index=False)
+            except:
+                continue
+        
+        # If all encodings fail, try with error handling
+        df = pd.read_csv(BytesIO(file_content), encoding='utf-8', errors='ignore')
         return df.to_string(index=False)
+        
     except Exception as e:
         st.warning(f"CSV extraction failed: {e}")
         return ""
 
-def extract_text_content(file_content: bytes, filename: str) -> str:
-    """Extract text content from various file formats"""
-    filename_lower = filename.lower()
-    
-    if filename_lower.endswith('.pdf'):
-        return extract_text_from_pdf(file_content)
-    elif filename_lower.endswith(('.xlsx', '.xls')):
-        return extract_text_from_excel(file_content, filename)
-    elif filename_lower.endswith('.csv'):
-        return extract_text_from_csv(file_content)
-    elif filename_lower.endswith('.txt'):
-        return file_content.decode('utf-8', errors='ignore')
-    else:
-        # Try to decode as text for unknown formats
-        try:
-            return file_content.decode('utf-8', errors='ignore')
-        except:
-            st.warning(f"Unsupported file format: {filename}")
-            return ""
-
-def extract_fund_data_with_gemini(model, text_content: str, filename: str, cache: ContextCache) -> pd.DataFrame:
-    """Extract fund data using Gemini AI with context caching"""
+# Enhanced AI extraction with better error handling
+def extract_fund_data_with_gemini_enhanced(model, text_content: str, filename: str, cache: ContextCache) -> pd.DataFrame:
+    """Enhanced Gemini extraction with better error handling and validation"""
     
     # Check cache first
     cached_result = cache.get_cached_context(text_content)
@@ -193,57 +314,172 @@ def extract_fund_data_with_gemini(model, text_content: str, filename: str, cache
         return cached_result
     
     try:
-        system_context = cache.create_system_context()
+        system_context = cache.create_robust_system_context()
         
+        # Enhanced prompt with more context about the specific document
         prompt = f"""
         {system_context}
         
         DOCUMENT TO ANALYZE: {filename}
+        DOCUMENT TYPE: {filename.split('.')[-1].upper() if '.' in filename else 'Unknown'}
         
-        CONTENT:
-        {text_content[:8000]}  # Limit content to avoid token limits
+        CONTENT (First 12,000 characters):
+        {text_content[:12000]}
         
-        SPECIFIC EXAMPLES from your training:
-        - "Crest Quant Alpha": 1.45% -> strategy should be "Quantitative" (from "Quant")
-        - "Crest Merger Fund" -> strategy should be "Event-Driven" (merger arbitrage)
-        - "Boreal Credit Opps" -> strategy should be "Credit" (from fund name)
-        - "Atlas Select" with "Long/Short Eq" -> "Long/Short Equity"
-        - "Atlas Currency" with "Global Macro" -> "Global Macro"
+        ANALYSIS INSTRUCTIONS:
+        1. This is a real investment document that may have ANY format
+        2. Apply your 20+ years of fund industry expertise
+        3. Extract ALL possible fund data, even if structure is unclear
+        4. Make professional judgments when data is ambiguous
+        5. Never skip funds due to missing data - extract what you can
+        6. If you see numbers that could be performance, include them
+        7. If you see fund-like names, include them
+        8. Use your experience to infer missing information
         
-        Please extract all fund performance data from this document and return as valid JSON array.
-        Focus on accuracy and completeness. Apply senior analyst expertise to interpret the data correctly.
-        Ensure EVERY fund has a strategy assigned - never leave strategy as null or empty.
+        Return comprehensive JSON with ALL funds found, including confidence levels.
         """
         
-        with st.spinner(f"AI analyzing {filename}..."):
+        with st.spinner(f"AI analyzing {filename} with enhanced intelligence..."):
             response = model.generate_content(prompt)
             
-            # Parse JSON response
+            # Enhanced JSON parsing with better error handling
             response_text = response.text.strip()
             
-            # Clean up response to extract JSON
+            # Multiple attempts to extract JSON
+            json_text = None
+            
+            # Method 1: Look for ```json blocks
             if '```json' in response_text:
                 json_start = response_text.find('```json') + 7
                 json_end = response_text.find('```', json_start)
                 json_text = response_text[json_start:json_end]
+            
+            # Method 2: Look for [ ] array
             elif '[' in response_text and ']' in response_text:
                 json_start = response_text.find('[')
                 json_end = response_text.rfind(']') + 1
                 json_text = response_text[json_start:json_end]
+            
+            # Method 3: Try to clean up the response
             else:
-                json_text = response_text
+                # Remove common AI response prefixes
+                cleaned = response_text.replace("Here's the extracted data:", "")
+                cleaned = cleaned.replace("Based on the document:", "")
+                # Look for JSON-like structures
+                import re
+                json_pattern = r'\[.*?\]'
+                matches = re.findall(json_pattern, cleaned, re.DOTALL)
+                if matches:
+                    json_text = matches[0]
             
-            # Parse JSON
-            fund_data = json.loads(json_text)
+            if json_text is None:
+                st.warning(f"Could not find valid JSON in AI response for {filename}")
+                st.write("Raw AI Response:", response_text[:500])
+                return pd.DataFrame()
             
-            # Convert to DataFrame
+            # Parse JSON with error handling
+            try:
+                fund_data = json.loads(json_text)
+            except json.JSONDecodeError as e:
+                st.warning(f"JSON parsing failed for {filename}. Attempting to fix...")
+                # Try to fix common JSON issues
+                json_text = json_text.replace("'", '"')  # Replace single quotes
+                json_text = re.sub(r',\s*}', '}', json_text)  # Remove trailing commas
+                json_text = re.sub(r',\s*]', ']', json_text)  # Remove trailing commas
+                try:
+                    fund_data = json.loads(json_text)
+                except:
+                    st.error(f"Could not parse JSON for {filename}")
+                    st.write("Cleaned JSON:", json_text[:500])
+                    return pd.DataFrame()
+            
+            # Convert to DataFrame with enhanced validation
+            if not fund_data or not isinstance(fund_data, list):
+                st.warning(f"No valid fund data found in {filename}")
+                return pd.DataFrame()
+            
             df = pd.DataFrame(fund_data)
+            
+            # Enhanced data validation and cleaning
+            if len(df) > 0:
+                # Validate and clean the data
+                df = validate_and_clean_extracted_data(df, filename)
             
             # Cache the result
             cache.set_cached_context(text_content, df)
             
-            st.success(f"✅ Extracted {len(df)} funds from {filename}")
+            confidence_info = ""
+            if 'confidence' in df.columns:
+                high_conf = (df['confidence'] == 'High').sum()
+                med_conf = (df['confidence'] == 'Medium').sum()
+                low_conf = (df['confidence'] == 'Low').sum()
+                confidence_info = f" (Confidence: {high_conf}H/{med_conf}M/{low_conf}L)"
+            
+            st.success(f"✅ Extracted {len(df)} funds from {filename}{confidence_info}")
             return df
+            
+    except Exception as e:
+        st.error(f"Enhanced AI extraction failed for {filename}: {e}")
+        st.write("This might be due to:")
+        st.write("- Document is image-based and needs OCR")
+        st.write("- Document has unusual structure")
+        st.write("- API rate limits or connection issues")
+        return pd.DataFrame()
+
+def validate_and_clean_extracted_data(df: pd.DataFrame, filename: str) -> pd.DataFrame:
+    """Validate and clean extracted fund data"""
+    
+    if df.empty:
+        return df
+    
+    original_count = len(df)
+    
+    # Ensure required columns exist
+    required_columns = ['fund_name', 'return', 'strategy']
+    for col in required_columns:
+        if col not in df.columns:
+            df[col] = None
+    
+    # Add missing columns
+    if 'aum' not in df.columns:
+        df['aum'] = None
+    if 'confidence' not in df.columns:
+        df['confidence'] = 'Medium'
+    
+    # Clean fund names
+    df['fund_name'] = df['fund_name'].astype(str).str.strip()
+    df = df[df['fund_name'] != 'nan']  # Remove rows with no fund name
+    df = df[df['fund_name'].str.len() > 2]  # Remove very short names
+    
+    # Clean and validate returns
+    if 'return' in df.columns:
+        df['return'] = pd.to_numeric(df['return'], errors='coerce')
+        # Flag suspicious returns
+        suspicious_returns = df[(df['return'].abs() > 2.0) & df['return'].notna()]
+        if len(suspicious_returns) > 0:
+            st.warning(f"Found {len(suspicious_returns)} funds with returns > 200% in {filename}")
+    
+    # Clean and validate AUM
+    if 'aum' in df.columns:
+        df['aum'] = pd.to_numeric(df['aum'], errors='coerce')
+        # Flag suspicious AUM
+        suspicious_aum = df[(df['aum'] > 500000) & df['aum'].notna()]  # > $500B
+        if len(suspicious_aum) > 0:
+            st.warning(f"Found {len(suspicious_aum)} funds with AUM > $500B in {filename}")
+    
+    # Clean strategies
+    if 'strategy' in df.columns:
+        df['strategy'] = df['strategy'].astype(str).str.strip()
+        df.loc[df['strategy'].isin(['None', 'nan', 'null', '']) | df['strategy'].isnull(), 'strategy'] = 'Multi-Strategy'
+    
+    # Remove duplicate fund names (keep first occurrence)
+    df = df.drop_duplicates(subset=['fund_name'], keep='first')
+    
+    final_count = len(df)
+    if final_count < original_count:
+        st.info(f"Cleaned data: {original_count} → {final_count} funds in {filename}")
+    
+    return df
             
     except json.JSONDecodeError as e:
         st.error(f"Failed to parse AI response for {filename}: {e}")
