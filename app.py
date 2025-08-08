@@ -1275,17 +1275,14 @@ def create_download_links(df: pd.DataFrame):
         st.markdown(href, unsafe_allow_html=True)
 
 # Enhanced main application with professional styling
+# Enhanced main application with professional styling - CLEAN VERSION
 def main():
     model = initialize_gemini()
     cache = get_context_cache()
     
     # Enhanced sidebar with professional styling
     with st.sidebar:
-        st.markdown("""
-        <div style="text-align: center; padding: 1rem 0; border-bottom: 1px solid #404040; margin-bottom: 1rem;">
-            <h2 style="color: #64b5f6; margin: 0;">⚙️ Control Panel</h2>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("## ⚙️ Control Panel")
         
         # Enhanced cache information
         st.markdown("### 🧠 Smart Caching")
@@ -1322,15 +1319,9 @@ def main():
         - Performance metrics
         """)
     
-    # Enhanced file uploader section (MAIN AREA - NOT SIDEBAR)
-    st.markdown("""
-    <div class="analysis-section">
-        <h2>📁 Upload Fund Documents</h2>
-        <p style="color: #90a4ae;">
-            Upload multiple files in any supported format. Our AI will intelligently extract and analyze fund performance data.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Simple file uploader section
+    st.markdown("## 📁 Upload Fund Documents")
+    st.markdown("Upload multiple files in any supported format. Our AI will intelligently extract and analyze fund performance data.")
     
     uploaded_files = st.file_uploader(
         "Choose files to analyze", 
@@ -1340,20 +1331,14 @@ def main():
     )
     
     if uploaded_files:
-        # Enhanced processing section
-        st.markdown(f"""
-        <div class="analysis-section">
-            <h3>🔄 Processing {len(uploaded_files)} Files</h3>
-        </div>
-        """, unsafe_allow_html=True)
+        # Processing section
+        st.markdown(f"## 🔄 Processing {len(uploaded_files)} Files")
         
         all_dataframes = []
         
-        # Enhanced progress tracking
-        progress_container = st.container()
-        with progress_container:
-            progress_bar = st.progress(0)
-            status_text = st.empty()
+        # Progress tracking
+        progress_bar = st.progress(0)
+        status_text = st.empty()
         
         for i, uploaded_file in enumerate(uploaded_files):
             progress = (i + 1) / len(uploaded_files)
@@ -1383,215 +1368,155 @@ def main():
         if all_dataframes:
             combined_df = pd.concat(all_dataframes, ignore_index=True)
             
-            # Enhanced success message
+            # Success message
             st.success(f"🎉 Successfully processed {len(all_dataframes)} files and extracted {len(combined_df)} fund records!")
             
-            # Enhanced data display section
-            st.markdown("""
-            <div class="analysis-section">
-                <h2>📋 Extracted Fund Data</h2>
-            </div>
-            """, unsafe_allow_html=True)
-            
+            # Data display
+            st.markdown("## 📋 Extracted Fund Data")
             st.dataframe(combined_df, use_container_width=True, height=400)
             
-            # Enhanced key metrics with professional styling
-            st.markdown("""
-            <div class="analysis-section">
-                <h3>📊 Portfolio Overview</h3>
-            </div>
-            """, unsafe_allow_html=True)
+            # Key metrics
+            st.markdown("## 📊 Portfolio Overview")
             
             col1, col2, col3, col4 = st.columns(4)
             
             with col1:
-                st.markdown(f"""
-                <div class="metric-container">
-                    <div class="metric-label">Total Funds</div>
-                    <div class="metric-value">{len(combined_df)}</div>
-                </div>
-                """, unsafe_allow_html=True)
+                st.metric("Total Funds", len(combined_df))
             
             with col2:
                 if 'strategy' in combined_df.columns:
                     strategies = combined_df['strategy'].nunique()
-                    st.markdown(f"""
-                    <div class="metric-container">
-                        <div class="metric-label">Strategies</div>
-                        <div class="metric-value">{strategies}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.metric("Strategies", strategies)
             
             with col3:
                 if 'aum' in combined_df.columns and not combined_df['aum'].isnull().all():
                     total_aum = combined_df['aum'].sum()
-                    st.markdown(f"""
-                    <div class="metric-container">
-                        <div class="metric-label">Total AUM</div>
-                        <div class="metric-value">${total_aum:,.0f}M</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.metric("Total AUM", f"${total_aum:,.0f}M")
             
             with col4:
                 if 'return' in combined_df.columns and not combined_df['return'].isnull().all():
                     avg_return = combined_df['return'].mean()
-                    color = "#4caf50" if avg_return > 0 else "#f44336"
-                    st.markdown(f"""
-                    <div class="metric-container">
-                        <div class="metric-label">Avg Return</div>
-                        <div class="metric-value" style="color: {color};">{avg_return:.2%}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.metric("Avg Return", f"{avg_return:.2%}")
             
-            # Create enhanced visualizations
+            # Create visualizations
             create_visualizations(combined_df)
             
-            # Enhanced download options
+            # Download options
             create_download_links(combined_df)
             
         else:
             st.error("❌ No valid fund data could be extracted from any of the uploaded files.")
             
-            # Enhanced troubleshooting section
-            st.markdown("""
-            <div class="analysis-section">
-                <h3>🔧 Troubleshooting Tips</h3>
-                <div style="background: rgba(244, 67, 54, 0.1); border: 1px solid #f44336; border-radius: 8px; padding: 1rem; margin: 1rem 0;">
-                    <h4 style="color: #f44336; margin-top: 0;">💡 Tips for Better Results:</h4>
-                    <ul style="color: #e8eaed; line-height: 1.6;">
-                        <li><strong>Document Quality:</strong> Ensure files contain actual fund performance data</li>
-                        <li><strong>PDF Issues:</strong> Check that text is not image-based (try copying text from the PDF)</li>
-                        <li><strong>Data Format:</strong> Verify that data is in a readable table or structured format</li>
-                        <li><strong>File Size:</strong> Very large files may have extraction issues</li>
-                        <li><strong>Content Type:</strong> Marketing materials may have limited extractable data</li>
-                    </ul>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            # Troubleshooting section
+            st.markdown("## 🔧 Troubleshooting Tips")
+            st.warning("""
+            **💡 Tips for Better Results:**
+            
+            - **Document Quality:** Ensure files contain actual fund performance data
+            - **PDF Issues:** Check that text is not image-based (try copying text from the PDF)
+            - **Data Format:** Verify that data is in a readable table or structured format
+            - **File Size:** Very large files may have extraction issues
+            - **Content Type:** Marketing materials may have limited extractable data
+            """)
     
     else:
-        # Enhanced welcome section with professional styling - CORRECTED VERSION
-        st.markdown("""
-        <div class="analysis-section">
-            <h2>🚀 Welcome to AI-Powered Fund Analysis</h2>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin: 2rem 0;">
-                
-                <div style="background: linear-gradient(135deg, rgba(66, 165, 245, 0.1), rgba(33, 150, 243, 0.1)); border: 1px solid rgba(66, 165, 245, 0.3); border-radius: 12px; padding: 1.5rem;">
-                    <h3 style="color: #64b5f6; margin-top: 0; display: flex; align-items: center;">
-                        📁 <span style="margin-left: 0.5rem;">Upload & Process</span>
-                    </h3>
-                    <p style="color: #b0bec5; line-height: 1.6;">
-                        Support for PDF, Excel, CSV, and text files. Our AI handles diverse document formats and complex data structures.
-                    </p>
-                    <ul style="color: #90a4ae; font-size: 0.9rem;">
-                        <li>Multi-format document support</li>
-                        <li>Intelligent text extraction</li>
-                        <li>Error handling & fallbacks</li>
-                    </ul>
-                </div>
-                
-                <div style="background: linear-gradient(135deg, rgba(76, 175, 80, 0.1), rgba(67, 160, 71, 0.1)); border: 1px solid rgba(76, 175, 80, 0.3); border-radius: 12px; padding: 1.5rem;">
-                    <h3 style="color: #66bb6a; margin-top: 0; display: flex; align-items: center;">
-                        🤖 <span style="margin-left: 0.5rem;">AI Analysis</span>
-                    </h3>
-                    <p style="color: #b0bec5; line-height: 1.6;">
-                        Advanced AI extracts fund data with 20+ years of financial analysis expertise built into the model.
-                    </p>
-                    <ul style="color: #90a4ae; font-size: 0.9rem;">
-                        <li>Intelligent data extraction</li>
-                        <li>Strategy classification</li>
-                        <li>Performance standardization</li>
-                    </ul>
-                </div>
-                
-                <div style="background: linear-gradient(135deg, rgba(255, 152, 0, 0.1), rgba(245, 124, 0, 0.1)); border: 1px solid rgba(255, 152, 0, 0.3); border-radius: 12px; padding: 1.5rem;">
-                    <h3 style="color: #ffa726; margin-top: 0; display: flex; align-items: center;">
-                        📊 <span style="margin-left: 0.5rem;">Professional Insights</span>
-                    </h3>
-                    <p style="color: #b0bec5; line-height: 1.6;">
-                        Generate comprehensive analysis with interactive visualizations and detailed performance metrics.
-                    </p>
-                    <ul style="color: #90a4ae; font-size: 0.9rem;">
-                        <li>Interactive dashboards</li>
-                        <li>Risk analysis & metrics</li>
-                        <li>Strategy comparisons</li>
-                    </ul>
-                </div>
-                
-                <div style="background: linear-gradient(135deg, rgba(156, 39, 176, 0.1), rgba(142, 36, 170, 0.1)); border: 1px solid rgba(156, 39, 176, 0.3); border-radius: 12px; padding: 1.5rem;">
-                    <h3 style="color: #ab47bc; margin-top: 0; display: flex; align-items: center;">
-                        ⬇️ <span style="margin-left: 0.5rem;">Export Results</span>
-                    </h3>
-                    <p style="color: #b0bec5; line-height: 1.6;">
-                        Download comprehensive reports in multiple formats for presentations and further analysis.
-                    </p>
-                    <ul style="color: #90a4ae; font-size: 0.9rem;">
-                        <li>Excel with multiple sheets</li>
-                        <li>CSV for data analysis</li>
-                        <li>JSON for developers</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        # Welcome section using Streamlit native components
+        st.markdown("## 🚀 Welcome to AI-Powered Fund Analysis")
         
-        # Enhanced capabilities section - CORRECTED VERSION
-        st.markdown("""
-        <div class="analysis-section">
-            <h3>🎯 What Our AI Can Extract</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin: 1rem 0;">
-                
-                <div style="background: rgba(66, 165, 245, 0.05); border-left: 4px solid #42a5f5; padding: 1rem; border-radius: 0 8px 8px 0;">
-                    <h4 style="color: #64b5f6; margin: 0 0 0.5rem 0;">📈 Performance Data</h4>
-                    <ul style="color: #b0bec5; margin: 0; font-size: 0.9rem;">
-                        <li>Weekly, monthly, quarterly returns</li>
-                        <li>YTD and since inception performance</li>
-                        <li>Absolute and percentage returns</li>
-                    </ul>
-                </div>
-                
-                <div style="background: rgba(76, 175, 80, 0.05); border-left: 4px solid #4caf50; padding: 1rem; border-radius: 0 8px 8px 0;">
-                    <h4 style="color: #66bb6a; margin: 0 0 0.5rem 0;">💰 Fund Information</h4>
-                    <ul style="color: #b0bec5; margin: 0; font-size: 0.9rem;">
-                        <li>Assets Under Management (AUM)</li>
-                        <li>Net Asset Value (NAV)</li>
-                        <li>Fund names and identifiers</li>
-                    </ul>
-                </div>
-                
-                <div style="background: rgba(255, 152, 0, 0.05); border-left: 4px solid #ff9800; padding: 1rem; border-radius: 0 8px 8px 0;">
-                    <h4 style="color: #ffa726; margin: 0 0 0.5rem 0;">🎯 Investment Strategies</h4>
-                    <ul style="color: #b0bec5; margin: 0; font-size: 0.9rem;">
-                        <li>Long/Short Equity, Credit, Macro</li>
-                        <li>Event-Driven, Quantitative</li>
-                        <li>Multi-Strategy classifications</li>
-                    </ul>
-                </div>
-                
-                <div style="background: rgba(156, 39, 176, 0.05); border-left: 4px solid #9c27b0; padding: 1rem; border-radius: 0 8px 8px 0;">
-                    <h4 style="color: #ab47bc; margin: 0 0 0.5rem 0;">📊 Additional Metrics</h4>
-                    <ul style="color: #b0bec5; margin: 0; font-size: 0.9rem;">
-                        <li>Risk metrics and volatility</li>
-                        <li>Sharpe ratios and drawdowns</li>
-                        <li>Benchmark comparisons</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        # Feature cards using columns
+        col1, col2 = st.columns(2)
         
-        # Call to action with enhanced styling
-        st.markdown("""
-        <div style="text-align: center; margin: 3rem 0; padding: 2rem; background: linear-gradient(135deg, rgba(66, 165, 245, 0.1), rgba(33, 150, 243, 0.1)); border-radius: 12px; border: 1px solid rgba(66, 165, 245, 0.3);">
-            <h3 style="color: #64b5f6; margin-bottom: 1rem;">Ready to Get Started?</h3>
-            <p style="color: #b0bec5; font-size: 1.1rem; margin-bottom: 1.5rem;">
-                Upload your fund documents above and let our AI do the heavy lifting.
-            </p>
-            <div style="color: #90a4ae; font-size: 0.9rem;">
-                <strong>Built for analysts by analysts</strong> • Powered by advanced AI • Professional-grade results
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        with col1:
+            st.markdown("### 📁 Upload & Process")
+            st.info("""
+            **Multi-format Support**
+            
+            Support for PDF, Excel, CSV, and text files. Our AI handles diverse document formats and complex data structures.
+            
+            ✅ Multi-format document support  
+            ✅ Intelligent text extraction  
+            ✅ Error handling & fallbacks
+            """)
+            
+            st.markdown("### 📊 Professional Insights")
+            st.success("""
+            **Advanced Analytics**
+            
+            Generate comprehensive analysis with interactive visualizations and detailed performance metrics.
+            
+            ✅ Interactive dashboards  
+            ✅ Risk analysis & metrics  
+            ✅ Strategy comparisons
+            """)
         
+        with col2:
+            st.markdown("### 🤖 AI Analysis")
+            st.info("""
+            **Expert-Level Intelligence**
+            
+            Advanced AI extracts fund data with 20+ years of financial analysis expertise built into the model.
+            
+            ✅ Intelligent data extraction  
+            ✅ Strategy classification  
+            ✅ Performance standardization
+            """)
+            
+            st.markdown("### ⬇️ Export Results")
+            st.success("""
+            **Multiple Formats**
+            
+            Download comprehensive reports in multiple formats for presentations and further analysis.
+            
+            ✅ Excel with multiple sheets  
+            ✅ CSV for data analysis  
+            ✅ JSON for developers
+            """)
+        
+        # What we extract section
+        st.markdown("## 🎯 What Our AI Can Extract")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.markdown("### 📈 Performance Data")
+            st.markdown("""
+            - Weekly, monthly, quarterly returns
+            - YTD and since inception performance
+            - Absolute and percentage returns
+            """)
+        
+        with col2:
+            st.markdown("### 💰 Fund Information")
+            st.markdown("""
+            - Assets Under Management (AUM)
+            - Net Asset Value (NAV)
+            - Fund names and identifiers
+            """)
+        
+        with col3:
+            st.markdown("### 🎯 Investment Strategies")
+            st.markdown("""
+            - Long/Short Equity, Credit, Macro
+            - Event-Driven, Quantitative
+            - Multi-Strategy classifications
+            """)
+        
+        with col4:
+            st.markdown("### 📊 Additional Metrics")
+            st.markdown("""
+            - Risk metrics and volatility
+            - Sharpe ratios and drawdowns
+            - Benchmark comparisons
+            """)
+        
+        # Call to action
+        st.markdown("---")
+        st.markdown("### 🎯 Ready to Get Started?")
+        st.info("""
+        **Upload your fund documents above and let our AI do the heavy lifting.**
+        
+        Built for analysts by analysts • Powered by advanced AI • Professional-grade results
+        """)
+
 if __name__ == "__main__":
     main()
