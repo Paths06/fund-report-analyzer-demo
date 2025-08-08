@@ -46,6 +46,11 @@ def initialize_gemini():
         st.error(f"Failed to initialize Gemini: {e}")
         st.stop()
 
+@st.cache_resource
+def get_context_cache():
+    """Get or create a context cache instance"""
+    return ContextCache()
+    
 # Context caching management
 class ContextCache:
     """Manages context caching for Gemini API to optimize token usage"""
