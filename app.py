@@ -1378,7 +1378,7 @@ def create_download_links(df: pd.DataFrame):
 def main():
     # Initialize Gemini model and cache
     model = initialize_gemini()
-    cache = get_cached_context()
+    cache = get_context_cache()
     
     # Sidebar for settings
     with st.sidebar:
