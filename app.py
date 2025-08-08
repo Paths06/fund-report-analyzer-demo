@@ -1275,7 +1275,6 @@ def create_download_links(df: pd.DataFrame):
         st.markdown(href, unsafe_allow_html=True)
 
 # Enhanced main application with professional styling
-# Enhanced main application with professional styling - COMPLETE CORRECTED VERSION
 def main():
     model = initialize_gemini()
     cache = get_context_cache()
@@ -1593,6 +1592,6 @@ def main():
             </div>
         </div>
         """, unsafe_allow_html=True)
-
+        
 if __name__ == "__main__":
     main()
