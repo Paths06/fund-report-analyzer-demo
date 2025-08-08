@@ -310,264 +310,466 @@ def standardize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     df = df.dropna(subset=['fund_name'])
     
     return df
+# Part 2: Visualization Functions and Main Application
 
 def create_visualizations(df: pd.DataFrame):
-    """Create comprehensive visualizations"""
+    """Create intuitive and meaningful fund analysis visualizations"""
     if df.empty:
         st.warning("No data available for visualization")
         return
     
-    st.subheader("📊 Performance Analytics")
+    st.subheader("📊 Fund Performance Dashboard")
     
-    # Create tabs for different analysis views
-    tab1, tab2, tab3, tab4 = st.tabs(["Returns Analysis", "AUM Analysis", "Strategy Performance", "Risk Metrics"])
+    # Create more intuitive tabs
+    tab1, tab2, tab3, tab4 = st.tabs(["🎯 Performance Ranking", "💰 Capital Analysis", "📈 Strategy Insights", "⚠️ Risk Assessment"])
     
     with tab1:
         col1, col2 = st.columns(2)
         
         with col1:
             if 'return' in df.columns and not df['return'].isnull().all():
-                st.write("**Top Performing Funds**")
-                top_funds = df.nlargest(10, 'return')[['fund_name', 'return', 'strategy']]
-                top_funds['return'] = top_funds['return'].apply(lambda x: f"{x:.2%}" if pd.notna(x) else "N/A")
-                st.dataframe(top_funds, use_container_width=True)
+                st.write("**🏆 Fund Performance Leaderboard**")
+                
+                # Create a more intuitive performance chart
+                fig, ax = plt.subplots(figsize=(10, 8))
+                
+                # Sort funds by performance
+                sorted_df = df.sort_values('return', ascending=True)
+                fund_names = [name[:20] + "..." if len(name) > 20 else name for name in sorted_df['fund_name']]
+                returns = sorted_df['return'].values
+                
+                # Color code: Green for positive, Red for negative, Yellow for near-zero
+                colors = []
+                for ret in returns:
+                    if ret > 0.005:  # > 0.5%
+                        colors.append('#2E8B57')  # Strong Green
+                    elif ret > 0:
+                        colors.append('#90EE90')  # Light Green
+                    elif ret > -0.005:  # > -0.5%
+                        colors.append('#FFD700')  # Yellow
+                    else:
+                        colors.append('#DC143C')  # Red
+                
+                bars = ax.barh(range(len(returns)), returns, color=colors)
+                ax.set_yticks(range(len(returns)))
+                ax.set_yticklabels(fund_names, fontsize=10)
+                ax.set_xlabel('Return (%)', fontsize=12, fontweight='bold')
+                ax.set_title('Fund Performance Ranking', fontsize=14, fontweight='bold', pad=20)
+                
+                # Add value labels
+                for i, v in enumerate(returns):
+                    label_color = 'white' if abs(v) > 0.005 else 'black'
+                    ax.text(v/2, i, f'{v:.2%}', va='center', ha='center', 
+                           fontweight='bold', color=label_color, fontsize=9)
+                
+                # Add zero line
+                ax.axvline(x=0, color='black', linestyle='--', alpha=0.5)
+                ax.grid(axis='x', alpha=0.3)
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
         
         with col2:
-            if 'return' in df.columns and not df['return'].isnull().all():
-                st.write("**Return Distribution**")
-                fig, ax = plt.subplots(figsize=(8, 6))
-                returns_clean = df['return'].dropna()
-                ax.hist(returns_clean, bins=20, alpha=0.7, color='skyblue')
-                ax.set_xlabel('Return')
-                ax.set_ylabel('Frequency')
-                ax.set_title('Distribution of Fund Returns')
+            if 'return' in df.columns and 'strategy' in df.columns:
+                st.write("**📊 Performance by Strategy (Box Plot)**")
+                
+                fig, ax = plt.subplots(figsize=(10, 8))
+                
+                # Create strategy performance box plot
+                strategy_data = []
+                strategy_labels = []
+                
+                for strategy in df['strategy'].unique():
+                    if pd.notna(strategy):
+                        strategy_returns = df[df['strategy'] == strategy]['return'].dropna()
+                        if len(strategy_returns) > 0:
+                            strategy_data.append(strategy_returns.values)
+                            strategy_labels.append(strategy[:15])
+                
+                if strategy_data:
+                    bp = ax.boxplot(strategy_data, labels=strategy_labels, patch_artist=True)
+                    
+                    # Color the boxes
+                    colors = plt.cm.Set3(range(len(bp['boxes'])))
+                    for patch, color in zip(bp['boxes'], colors):
+                        patch.set_facecolor(color)
+                        patch.set_alpha(0.7)
+                    
+                    ax.set_ylabel('Return (%)', fontsize=12, fontweight='bold')
+                    ax.set_title('Return Distribution by Strategy', fontsize=14, fontweight='bold', pad=20)
+                    ax.tick_params(axis='x', rotation=45)
+                    ax.grid(axis='y', alpha=0.3)
+                    ax.axhline(y=0, color='red', linestyle='--', alpha=0.5)
+                
                 plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
     
     with tab2:
-        if 'aum' in df.columns and not df['aum'].isnull().all():
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.write("**Largest Funds by AUM**")
-                large_funds = df.nlargest(10, 'aum')[['fund_name', 'aum', 'strategy']]
-                large_funds['aum'] = large_funds['aum'].apply(lambda x: f"${x:,.1f}M" if pd.notna(x) else "N/A")
-                st.dataframe(large_funds, use_container_width=True)
-            
-            with col2:
-                st.write("**AUM by Strategy**")
-                aum_by_strategy = df.groupby('strategy')['aum'].sum().sort_values(ascending=False)
-                fig, ax = plt.subplots(figsize=(8, 6))
-                ax.bar(range(len(aum_by_strategy)), aum_by_strategy.values, color='orange')
-                ax.set_xticks(range(len(aum_by_strategy)))
-                ax.set_xticklabels(aum_by_strategy.index, rotation=45, ha='right')
-                ax.set_ylabel('Total AUM (M USD)')
-                ax.set_title('Total AUM by Strategy')
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if 'aum' in df.columns and not df['aum'].isnull().all():
+                st.write("**💰 Capital Allocation Overview**")
+                
+                fig, ax = plt.subplots(figsize=(10, 8))
+                
+                # Create a treemap-style visualization using a pie chart with better labels
+                strategy_aum = df.groupby('strategy')['aum'].sum().sort_values(ascending=False)
+                
+                # Custom colors for better visualization
+                colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FCEA2B', '#FF9F43', '#EE5A24']
+                
+                wedges, texts, autotexts = ax.pie(strategy_aum.values, 
+                                                 labels=strategy_aum.index,
+                                                 autopct=lambda pct: f'${strategy_aum.sum()*pct/100:.0f}M\n({pct:.1f}%)',
+                                                 colors=colors[:len(strategy_aum)],
+                                                 startangle=90,
+                                                 textprops={'fontsize': 10})
+                
+                # Improve text readability
+                for autotext in autotexts:
+                    autotext.set_color('white')
+                    autotext.set_fontweight('bold')
+                    autotext.set_fontsize(9)
+                
+                ax.set_title('AUM Distribution by Strategy', fontsize=14, fontweight='bold', pad=20)
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
+        
+        with col2:
+            if 'aum' in df.columns and 'return' in df.columns:
+                st.write("**📈 Capital vs Performance Analysis**")
+                
+                fig, ax = plt.subplots(figsize=(10, 8))
+                
+                # Scatter plot of AUM vs Return with fund labels
+                scatter = ax.scatter(df['return'], df['aum'], 
+                                   s=100, alpha=0.7, 
+                                   c=range(len(df)), cmap='viridis')
+                
+                # Add fund labels
+                for i, row in df.iterrows():
+                    if pd.notna(row['return']) and pd.notna(row['aum']):
+                        label = row['fund_name'][:15] + "..." if len(row['fund_name']) > 15 else row['fund_name']
+                        ax.annotate(label, (row['return'], row['aum']), 
+                                   xytext=(5, 5), textcoords='offset points',
+                                   fontsize=8, alpha=0.8)
+                
+                ax.set_xlabel('Return (%)', fontsize=12, fontweight='bold')
+                ax.set_ylabel('AUM ($M)', fontsize=12, fontweight='bold')
+                ax.set_title('Fund Size vs Performance', fontsize=14, fontweight='bold', pad=20)
+                ax.grid(True, alpha=0.3)
+                ax.axvline(x=0, color='red', linestyle='--', alpha=0.5)
+                
                 plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
     
     with tab3:
-        if 'strategy' in df.columns and 'return' in df.columns:
-            strategy_stats = df.groupby('strategy').agg({
-                'return': ['mean', 'std', 'count'],
-                'aum': 'sum'
-            }).round(4)
-            
-            strategy_stats.columns = ['Avg Return', 'Return Std', 'Fund Count', 'Total AUM']
-            strategy_stats['Avg Return'] = strategy_stats['Avg Return'].apply(lambda x: f"{x:.2%}" if pd.notna(x) else "N/A")
-            strategy_stats['Return Std'] = strategy_stats['Return Std'].apply(lambda x: f"{x:.2%}" if pd.notna(x) else "N/A")
-            strategy_stats['Total AUM'] = strategy_stats['Total AUM'].apply(lambda x: f"${x:,.1f}M" if pd.notna(x) else "N/A")
-            
-            st.write("**Strategy Performance Summary**")
-            st.dataframe(strategy_stats, use_container_width=True)
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if 'strategy' in df.columns and 'return' in df.columns:
+                st.write("**🎯 Strategy Performance Comparison**")
+                
+                fig, ax = plt.subplots(figsize=(10, 8))
+                
+                # Calculate strategy metrics
+                strategy_stats = df.groupby('strategy').agg({
+                    'return': ['mean', 'count'],
+                    'aum': 'sum'
+                }).round(4)
+                
+                strategy_stats.columns = ['Avg_Return', 'Fund_Count', 'Total_AUM']
+                strategy_stats = strategy_stats.sort_values('Avg_Return', ascending=True)
+                
+                # Create horizontal bar chart with fund count as bar width
+                colors = ['red' if x < 0 else 'lightgreen' if x < 0.005 else 'green' 
+                         for x in strategy_stats['Avg_Return']]
+                
+                bars = ax.barh(range(len(strategy_stats)), strategy_stats['Avg_Return'], 
+                              color=colors, alpha=0.8)
+                
+                ax.set_yticks(range(len(strategy_stats)))
+                ax.set_yticklabels(strategy_stats.index, fontsize=10)
+                ax.set_xlabel('Average Return (%)', fontsize=12, fontweight='bold')
+                ax.set_title('Strategy Performance Ranking', fontsize=14, fontweight='bold', pad=20)
+                
+                # Add value and fund count labels
+                for i, (ret, count) in enumerate(zip(strategy_stats['Avg_Return'], strategy_stats['Fund_Count'])):
+                    ax.text(ret + 0.001 if ret > 0 else ret - 0.001, i, 
+                           f'{ret:.2%} ({int(count)} funds)', 
+                           va='center', ha='left' if ret > 0 else 'right', fontsize=9)
+                
+                ax.axvline(x=0, color='black', linestyle='--', alpha=0.5)
+                ax.grid(axis='x', alpha=0.3)
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
+        
+        with col2:
+            if 'strategy' in df.columns:
+                st.write("**📋 Strategy Summary Table**")
+                
+                # Create comprehensive strategy summary
+                strategy_summary = df.groupby('strategy').agg({
+                    'return': ['mean', 'std', 'min', 'max', 'count'],
+                    'aum': ['sum', 'mean']
+                }).round(4)
+                
+                # Flatten column names
+                strategy_summary.columns = ['Avg Return', 'Volatility', 'Min Return', 'Max Return', 
+                                          'Funds', 'Total AUM', 'Avg Fund Size']
+                
+                # Format for display
+                display_summary = strategy_summary.copy()
+                for col in ['Avg Return', 'Volatility', 'Min Return', 'Max Return']:
+                    display_summary[col] = display_summary[col].apply(lambda x: f"{x:.2%}" if pd.notna(x) else "N/A")
+                
+                for col in ['Total AUM', 'Avg Fund Size']:
+                    display_summary[col] = display_summary[col].apply(lambda x: f"${x:.0f}M" if pd.notna(x) else "N/A")
+                
+                display_summary['Funds'] = display_summary['Funds'].astype(int)
+                
+                st.dataframe(display_summary, use_container_width=True)
     
     with tab4:
-        if 'return' in df.columns and not df['return'].isnull().all():
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                # Risk-Return Scatter
-                if 'aum' in df.columns:
-                    fig, ax = plt.subplots(figsize=(8, 6))
-                    scatter = ax.scatter(df['return'], df['aum'], alpha=0.6, s=50)
-                    ax.set_xlabel('Return')
-                    ax.set_ylabel('AUM (M USD)')
-                    ax.set_title('Risk-Return Profile')
-                    plt.tight_layout()
-                    st.pyplot(fig)
-                    plt.close()
-            
-            with col2:
-                # Performance metrics
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if 'return' in df.columns and not df['return'].isnull().all():
+                st.write("**⚠️ Risk Distribution Analysis**")
+                
+                fig, ax = plt.subplots(figsize=(10, 8))
+                
+                # Create risk buckets
                 returns_clean = df['return'].dropna()
+                
+                # Define risk categories
+                high_risk = returns_clean[abs(returns_clean) > 0.01].count()
+                medium_risk = returns_clean[(abs(returns_clean) > 0.005) & (abs(returns_clean) <= 0.01)].count()
+                low_risk = returns_clean[abs(returns_clean) <= 0.005].count()
+                
+                categories = ['Low Risk\n(±0.5%)', 'Medium Risk\n(±0.5-1%)', 'High Risk\n(>±1%)']
+                counts = [low_risk, medium_risk, high_risk]
+                colors = ['green', 'orange', 'red']
+                
+                bars = ax.bar(categories, counts, color=colors, alpha=0.7)
+                ax.set_ylabel('Number of Funds', fontsize=12, fontweight='bold')
+                ax.set_title('Risk Profile Distribution', fontsize=14, fontweight='bold', pad=20)
+                
+                # Add count labels
+                for bar, count in zip(bars, counts):
+                    ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.1,
+                           str(count), ha='center', va='bottom', fontweight='bold')
+                
+                ax.grid(axis='y', alpha=0.3)
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
+        
+        with col2:
+            if 'return' in df.columns and not df['return'].isnull().all():
+                st.write("**📊 Portfolio Risk Metrics**")
+                
+                returns_clean = df['return'].dropna()
+                
                 if len(returns_clean) > 0:
-                    metrics = {
-                        'Average Return': f"{returns_clean.mean():.2%}",
-                        'Median Return': f"{returns_clean.median():.2%}",
-                        'Standard Deviation': f"{returns_clean.std():.2%}",
-                        'Best Performer': f"{returns_clean.max():.2%}",
-                        'Worst Performer': f"{returns_clean.min():.2%}"
+                    # Calculate comprehensive risk metrics
+                    portfolio_return = returns_clean.mean()
+                    portfolio_vol = returns_clean.std()
+                    downside_deviation = returns_clean[returns_clean < 0].std() if len(returns_clean[returns_clean < 0]) > 0 else 0
+                    max_drawdown = returns_clean.min()
+                    upside_capture = returns_clean[returns_clean > 0].mean() if len(returns_clean[returns_clean > 0]) > 0 else 0
+                    win_rate = (returns_clean > 0).sum() / len(returns_clean)
+                    
+                    # Create metrics display
+                    metrics_data = {
+                        'Metric': ['Portfolio Return', 'Volatility', 'Downside Risk', 'Max Drawdown', 
+                                 'Win Rate', 'Best Performer', 'Worst Performer'],
+                        'Value': [
+                            f'{portfolio_return:.2%}',
+                            f'{portfolio_vol:.2%}',
+                            f'{downside_deviation:.2%}',
+                            f'{max_drawdown:.2%}',
+                            f'{win_rate:.1%}',
+                            f'{returns_clean.max():.2%}',
+                            f'{returns_clean.min():.2%}'
+                        ],
+                        'Status': [
+                            '🟢' if portfolio_return > 0 else '🔴',
+                            '🟢' if portfolio_vol < 0.01 else '🟡' if portfolio_vol < 0.02 else '🔴',
+                            '🟢' if downside_deviation < 0.01 else '🟡' if downside_deviation < 0.02 else '🔴',
+                            '🔴' if max_drawdown < -0.005 else '🟡' if max_drawdown < 0 else '🟢',
+                            '🟢' if win_rate > 0.7 else '🟡' if win_rate > 0.5 else '🔴',
+                            '🟢',
+                            '🔴' if max_drawdown < -0.005 else '🟡'
+                        ]
                     }
                     
-                    st.write("**Portfolio Metrics**")
-                    for metric, value in metrics.items():
-                        st.metric(metric, value)
+                    metrics_df = pd.DataFrame(metrics_data)
+                    st.dataframe(metrics_df, use_container_width=True, hide_index=True)
 
 def generate_executive_summary_pdf(df: pd.DataFrame) -> bytes:
-    """Generate a professional one-page executive summary PDF with better layout and intuitive charts"""
+    """Generate a clean, professional executive summary PDF"""
     from matplotlib.backends.backend_pdf import PdfPages
-    import matplotlib.patches as mpatches
     from datetime import datetime
-    import seaborn as sns
-    
-    # Set professional styling
-    plt.style.use('default')
-    sns.set_palette("husl")
     
     # Create PDF
     pdf_buffer = BytesIO()
     
     with PdfPages(pdf_buffer) as pdf:
-        # Create figure with better layout
+        # Create figure with clean layout
         fig = plt.figure(figsize=(8.27, 11.69))  # A4 size
         fig.patch.set_facecolor('white')
         
-        # Main title
+        # === HEADER SECTION ===
         fig.text(0.5, 0.95, 'FUND PERFORMANCE EXECUTIVE SUMMARY', 
-                fontsize=18, fontweight='bold', ha='center')
+                fontsize=16, fontweight='bold', ha='center')
         
-        # Header info bar
+        # Header details
         report_date = datetime.now().strftime('%B %d, %Y')
         total_funds = len(df)
         total_strategies = df["strategy"].nunique() if "strategy" in df.columns else 0
         
-        fig.text(0.1, 0.91, f'Report Date: {report_date}', fontsize=10, fontweight='bold')
-        fig.text(0.5, 0.91, f'Portfolio Overview: {total_funds} Funds | {total_strategies} Strategies', 
-                fontsize=10, fontweight='bold', ha='center')
+        fig.text(0.1, 0.91, f'Report Date: {report_date}', fontsize=10)
+        fig.text(0.5, 0.91, f'Portfolio: {total_funds} Funds | {total_strategies} Strategies', 
+                fontsize=10, ha='center')
         
         if 'aum' in df.columns and not df['aum'].isnull().all():
             total_aum = df['aum'].sum()
-            fig.text(0.9, 0.91, f'Total AUM: ${total_aum:,.0f}M', 
-                    fontsize=10, fontweight='bold', ha='right')
+            fig.text(0.9, 0.91, f'Total AUM: ${total_aum:,.0f}M', fontsize=10, ha='right')
         
-        # Horizontal line separator
-        fig.add_artist(plt.Line2D([0.1, 0.9], [0.89, 0.89], color='#333333', linewidth=1))
+        # Separator line
+        fig.add_artist(plt.Line2D([0.1, 0.9], [0.89, 0.89], color='black', linewidth=0.5))
         
-        # === TOP SECTION: KEY METRICS CARDS ===
-        metrics_y = 0.82
-        card_width = 0.18
-        card_spacing = 0.2
-        
+        # === KEY METRICS CARDS ===
         if 'return' in df.columns and not df['return'].isnull().all():
-            # Card 1: Average Return
             avg_return = df['return'].mean()
-            fig.text(0.1 + 0*card_spacing, metrics_y, 'AVERAGE RETURN', 
-                    fontsize=9, fontweight='bold', ha='center')
-            fig.text(0.1 + 0*card_spacing, metrics_y - 0.03, f'{avg_return:.2%}', 
-                    fontsize=16, fontweight='bold', ha='center', 
-                    color='green' if avg_return > 0 else 'red')
+            best_return = df['return'].max()
+            win_rate = (df['return'] > 0).sum() / len(df[df['return'].notna()])
+            volatility = df['return'].std()
+            
+            # Create metric cards
+            y_pos = 0.82
+            
+            # Card 1: Portfolio Return
+            fig.text(0.2, y_pos, 'PORTFOLIO RETURN', fontsize=12, fontweight='bold', ha='center')
+            color = 'green' if avg_return > 0 else 'red'
+            fig.text(0.2, y_pos - 0.04, f'{avg_return:.2%}', fontsize=20, fontweight='bold', 
+                    ha='center', color=color)
             
             # Card 2: Best Performer
-            best_idx = df['return'].idxmax()
-            best_fund = df.loc[best_idx, 'fund_name'][:15] + "..." if len(df.loc[best_idx, 'fund_name']) > 15 else df.loc[best_idx, 'fund_name']
-            best_return = df['return'].max()
-            fig.text(0.1 + 1*card_spacing, metrics_y, 'BEST PERFORMER', 
-                    fontsize=9, fontweight='bold', ha='center')
-            fig.text(0.1 + 1*card_spacing, metrics_y - 0.025, best_fund, 
-                    fontsize=10, ha='center')
-            fig.text(0.1 + 1*card_spacing, metrics_y - 0.045, f'{best_return:.2%}', 
-                    fontsize=14, fontweight='bold', ha='center', color='green')
+            fig.text(0.5, y_pos, 'BEST PERFORMER', fontsize=12, fontweight='bold', ha='center')
+            fig.text(0.5, y_pos - 0.04, f'{best_return:.2%}', fontsize=20, fontweight='bold', 
+                    ha='center', color='green')
             
             # Card 3: Win Rate
-            positive_returns = (df['return'] > 0).sum()
-            win_rate = positive_returns / len(df[df['return'].notna()])
-            fig.text(0.1 + 2*card_spacing, metrics_y, 'WIN RATE', 
-                    fontsize=9, fontweight='bold', ha='center')
-            fig.text(0.1 + 2*card_spacing, metrics_y - 0.03, f'{win_rate:.1%}', 
-                    fontsize=16, fontweight='bold', ha='center', 
-                    color='green' if win_rate > 0.5 else 'orange')
-            
-            # Card 4: Risk Level
-            volatility = df['return'].std()
-            risk_level = "Low" if volatility < 0.005 else "Medium" if volatility < 0.015 else "High"
-            fig.text(0.1 + 3*card_spacing, metrics_y, 'VOLATILITY', 
-                    fontsize=9, fontweight='bold', ha='center')
-            fig.text(0.1 + 3*card_spacing, metrics_y - 0.025, risk_level, 
-                    fontsize=12, fontweight='bold', ha='center')
-            fig.text(0.1 + 3*card_spacing, metrics_y - 0.045, f'{volatility:.2%}', 
-                    fontsize=10, ha='center', color='gray')
+            fig.text(0.8, y_pos, 'WIN RATE', fontsize=12, fontweight='bold', ha='center')
+            color = 'green' if win_rate > 0.5 else 'red'
+            fig.text(0.8, y_pos - 0.04, f'{win_rate:.1%}', fontsize=20, fontweight='bold', 
+                    ha='center', color=color)
         
-        # === CHART 1: Performance Scatter Plot (Risk vs Return) ===
-        ax1 = fig.add_subplot(3, 2, 1)
-        if 'return' in df.columns and 'aum' in df.columns and not df['aum'].isnull().all():
-            # Calculate strategy-level metrics for better visualization
-            strategy_metrics = df.groupby('strategy').agg({
-                'return': 'mean',
-                'aum': 'sum'
-            }).reset_index()
-            
-            # Create bubble chart
-            colors = plt.cm.Set3(range(len(strategy_metrics)))
-            for i, (_, row) in enumerate(strategy_metrics.iterrows()):
-                ax1.scatter(row['return'], row['aum'], 
-                           s=max(100, row['aum']/50), alpha=0.7, 
-                           color=colors[i], label=row['strategy'][:12])
-            
-            ax1.set_xlabel('Average Return', fontweight='bold')
-            ax1.set_ylabel('Total AUM ($M)', fontweight='bold')
-            ax1.set_title('Risk-Return Profile by Strategy', fontweight='bold', pad=10)
-            ax1.grid(True, alpha=0.3)
-            ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8)
-        
-        # === CHART 2: Top/Bottom Performers Bar Chart ===
-        ax2 = fig.add_subplot(3, 2, 2)
+        # === TOP PERFORMERS TABLE ===
         if 'return' in df.columns and not df['return'].isnull().all():
-            # Get top 3 and bottom 2 performers
-            sorted_funds = df.sort_values('return', ascending=False)
-            top_funds = sorted_funds.head(3)
-            bottom_funds = sorted_funds.tail(2)
-            display_funds = pd.concat([top_funds, bottom_funds])
+            # Position for table
+            table_y = 0.72
+            fig.text(0.1, table_y, 'TOP PERFORMERS', fontsize=14, fontweight='bold')
             
-            # Truncate long fund names
-            fund_names = [name[:15] + "..." if len(name) > 15 else name 
-                         for name in display_funds['fund_name']]
-            returns = display_funds['return'].values
+            # Get top 5 performers
+            top_performers = df.nlargest(5, 'return')[['fund_name', 'return', 'strategy']]
             
-            # Color coding: green for positive, red for negative
+            # Table headers
+            fig.text(0.1, table_y - 0.03, 'Fund Name', fontsize=10, fontweight='bold')
+            fig.text(0.5, table_y - 0.03, 'Return', fontsize=10, fontweight='bold')
+            fig.text(0.7, table_y - 0.03, 'Strategy', fontsize=10, fontweight='bold')
+            
+            # Table data
+            for i, (_, row) in enumerate(top_performers.iterrows()):
+                y = table_y - 0.06 - (i * 0.025)
+                fund_name = row['fund_name'][:25] + "..." if len(row['fund_name']) > 25 else row['fund_name']
+                strategy = str(row['strategy'])[:15] + "..." if len(str(row['strategy'])) > 15 else str(row['strategy'])
+                
+                fig.text(0.1, y, fund_name, fontsize=9)
+                fig.text(0.5, y, f"{row['return']:.2%}", fontsize=9, 
+                        color='green' if row['return'] > 0 else 'red')
+                fig.text(0.7, y, strategy, fontsize=9)
+        
+        # === CHART 1: Performance Ranking ===
+        ax1 = plt.axes([0.1, 0.35, 0.35, 0.25])  # [left, bottom, width, height]
+        
+        if 'return' in df.columns and not df['return'].isnull().all():
+            # Sort and limit to top/bottom performers
+            sorted_df = df.sort_values('return', ascending=False)
+            display_df = pd.concat([sorted_df.head(3), sorted_df.tail(2)])
+            
+            fund_names = [name[:12] + "..." if len(name) > 12 else name for name in display_df['fund_name']]
+            returns = display_df['return'].values
+            
             colors = ['green' if r > 0 else 'red' for r in returns]
             
-            bars = ax2.barh(range(len(returns)), returns, color=colors, alpha=0.7)
-            ax2.set_yticks(range(len(returns)))
-            ax2.set_yticklabels(fund_names, fontsize=9)
-            ax2.set_xlabel('Return', fontweight='bold')
-            ax2.set_title('Top & Bottom Performers', fontweight='bold', pad=10)
-            ax2.grid(axis='x', alpha=0.3)
+            bars = ax1.barh(range(len(returns)), returns, color=colors, alpha=0.7)
+            ax1.set_yticks(range(len(returns)))
+            ax1.set_yticklabels(fund_names, fontsize=8)
+            ax1.set_xlabel('Return', fontsize=9)
+            ax1.set_title('Fund Performance', fontsize=11, fontweight='bold')
+            ax1.grid(axis='x', alpha=0.3)
+            ax1.axvline(x=0, color='black', linestyle='-', alpha=0.5)
             
             # Add value labels
             for i, v in enumerate(returns):
-                ax2.text(v + (0.001 if v > 0 else -0.001), i, f'{v:.2%}', 
-                        va='center', ha='left' if v > 0 else 'right', fontsize=9)
+                ax1.text(v + (0.001 if v > 0 else -0.001), i, f'{v:.1%}', 
+                        va='center', ha='left' if v > 0 else 'right', fontsize=8)
         
-        # === CHART 3: Strategy Allocation Pie Chart ===
-        ax3 = fig.add_subplot(3, 2, 3)
+        # === CHART 2: Strategy Performance ===
+        ax2 = plt.axes([0.55, 0.35, 0.35, 0.25])
+        
+        if 'strategy' in df.columns and 'return' in df.columns:
+            strategy_returns = df.groupby('strategy')['return'].mean().sort_values(ascending=True)
+            
+            colors = ['red' if r < 0 else 'lightgreen' if r < 0.005 else 'green' 
+                     for r in strategy_returns.values]
+            
+            bars = ax2.barh(range(len(strategy_returns)), strategy_returns.values, color=colors, alpha=0.7)
+            ax2.set_yticks(range(len(strategy_returns)))
+            ax2.set_yticklabels([s[:12] + "..." if len(s) > 12 else s for s in strategy_returns.index], fontsize=8)
+            ax2.set_xlabel('Avg Return', fontsize=9)
+            ax2.set_title('Strategy Performance', fontsize=11, fontweight='bold')
+            ax2.grid(axis='x', alpha=0.3)
+            ax2.axvline(x=0, color='black', linestyle='-', alpha=0.5)
+            
+            # Add value labels
+            for i, v in enumerate(strategy_returns.values):
+                ax2.text(v + (0.0005 if v > 0 else -0.0005), i, f'{v:.1%}', 
+                        va='center', ha='left' if v > 0 else 'right', fontsize=8)
+        
+        # === AUM ALLOCATION PIE CHART ===
         if 'aum' in df.columns and 'strategy' in df.columns and not df['aum'].isnull().all():
+            ax3 = plt.axes([0.1, 0.05, 0.35, 0.25])
+            
             strategy_aum = df.groupby('strategy')['aum'].sum().sort_values(ascending=False)
             
-            # Only show top 6 strategies, group others as "Other"
-            if len(strategy_aum) > 6:
-                top_strategies = strategy_aum.head(6)
-                other_aum = strategy_aum.tail(-6).sum()
+            # Limit to top 5 strategies
+            if len(strategy_aum) > 5:
+                top_strategies = strategy_aum.head(5)
+                other_aum = strategy_aum.tail(-5).sum()
                 if other_aum > 0:
                     top_strategies['Other'] = other_aum
                 strategy_aum = top_strategies
             
-            # Create pie chart with better colors
-            colors = plt.cm.Set3(range(len(strategy_aum)))
+            colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FCEA2B', '#FF9F43']
+            
             wedges, texts, autotexts = ax3.pie(strategy_aum.values, 
-                                              labels=[s[:12] + "..." if len(s) > 12 else s for s in strategy_aum.index],
-                                              autopct='%1.1f%%', colors=colors, startangle=90)
+                                              labels=[s[:10] + "..." if len(s) > 10 else s for s in strategy_aum.index],
+                                              autopct='%1.1f%%',
+                                              colors=colors[:len(strategy_aum)],
+                                              startangle=90)
             
             # Improve text readability
             for autotext in autotexts:
@@ -578,97 +780,54 @@ def generate_executive_summary_pdf(df: pd.DataFrame) -> bytes:
             for text in texts:
                 text.set_fontsize(8)
             
-            ax3.set_title('AUM Allocation by Strategy', fontweight='bold', pad=10)
+            ax3.set_title('AUM Allocation', fontsize=11, fontweight='bold')
         
-        # === CHART 4: Monthly Performance Trend (simulated) ===
-        ax4 = fig.add_subplot(3, 2, 4)
-        if 'return' in df.columns and not df['return'].isnull().all():
-            # Create a simulated trend based on current performance
-            strategies = df['strategy'].unique()[:5]  # Top 5 strategies
-            months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']
-            
-            for i, strategy in enumerate(strategies):
-                if pd.notna(strategy):
-                    strategy_return = df[df['strategy'] == strategy]['return'].mean()
-                    # Simulate monthly variation around the base return
-                    np.random.seed(42 + i)  # For reproducible results
-                    monthly_returns = strategy_return + np.random.normal(0, 0.002, len(months))
-                    
-                    ax4.plot(months, monthly_returns, marker='o', linewidth=2, 
-                            label=strategy[:12], alpha=0.8)
-            
-            ax4.set_ylabel('Return', fontweight='bold')
-            ax4.set_title('Performance Trend (6M)', fontweight='bold', pad=10)
-            ax4.grid(True, alpha=0.3)
-            ax4.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8)
-            ax4.tick_params(axis='x', rotation=45)
+        # === KEY INSIGHTS TABLE ===
+        ax4 = plt.axes([0.55, 0.05, 0.35, 0.25])
+        ax4.axis('off')
         
-        # === BOTTOM SECTION: KEY INSIGHTS TABLE ===
-        ax5 = fig.add_subplot(3, 1, 3)
-        ax5.axis('off')
-        
-        # Create insights table
-        insights_data = []
+        # Create insights summary
+        insights = []
         
         if 'return' in df.columns and not df['return'].isnull().all():
-            avg_return = df['return'].mean()
             volatility = df['return'].std()
-            sharpe_approx = (avg_return - 0.02) / volatility if volatility > 0 else 0
+            positive_funds = (df['return'] > 0).sum()
+            total_funds_with_return = len(df[df['return'].notna()])
             
-            insights_data.append(['Portfolio Metrics', f'Avg Return: {avg_return:.2%}', 
-                                f'Volatility: {volatility:.2%}', f'Sharpe*: {sharpe_approx:.2f}'])
+            insights.extend([
+                f"Portfolio Volatility: {volatility:.2%}",
+                f"Positive Returns: {positive_funds}/{total_funds_with_return}",
+                f"Risk Level: {'Low' if volatility < 0.005 else 'Medium' if volatility < 0.015 else 'High'}"
+            ])
         
-        if 'strategy' in df.columns:
-            best_strategy = df.groupby('strategy')['return'].mean().idxmax() if 'return' in df.columns else "N/A"
-            strategy_count = df.groupby('strategy').size()
-            most_diversified = strategy_count.idxmax()
-            
-            insights_data.append(['Strategy Analysis', f'Best Strategy: {best_strategy}', 
-                                f'Most Diversified: {most_diversified}', 
-                                f'Total Strategies: {df["strategy"].nunique()}'])
+        if 'strategy' in df.columns and 'return' in df.columns:
+            best_strategy = df.groupby('strategy')['return'].mean().idxmax()
+            strategy_count = df['strategy'].nunique()
+            insights.extend([
+                f"Best Strategy: {best_strategy[:15]}",
+                f"Total Strategies: {strategy_count}"
+            ])
         
         if 'aum' in df.columns and not df['aum'].isnull().all():
-            total_aum = df['aum'].sum()
+            largest_fund = df.loc[df['aum'].idxmax(), 'fund_name']
             avg_fund_size = df['aum'].mean()
-            largest_fund = df.loc[df['aum'].idxmax(), 'fund_name'][:20]
-            
-            insights_data.append(['Capital Analysis', f'Total AUM: ${total_aum:,.0f}M', 
-                                f'Avg Fund Size: ${avg_fund_size:.0f}M', 
-                                f'Largest: {largest_fund}'])
+            insights.extend([
+                f"Largest Fund: {largest_fund[:15]}",
+                f"Avg Fund Size: ${avg_fund_size:.0f}M"
+            ])
         
-        # Create table
-        if insights_data:
-            table = ax5.table(cellText=insights_data,
-                            colLabels=['Category', 'Metric 1', 'Metric 2', 'Metric 3'],
-                            cellLoc='left',
-                            loc='center',
-                            bbox=[0.1, 0.2, 0.8, 0.6])
-            
-            table.auto_set_font_size(False)
-            table.set_fontsize(10)
-            table.scale(1, 2)
-            
-            # Style the table
-            for i in range(len(insights_data) + 1):
-                for j in range(4):
-                    cell = table[(i, j)]
-                    if i == 0:  # Header
-                        cell.set_facecolor('#4CAF50')
-                        cell.set_text_props(weight='bold', color='white')
-                    else:
-                        cell.set_facecolor('#f8f9fa' if i % 2 == 0 else 'white')
-                        if j == 0:  # Category column
-                            cell.set_text_props(weight='bold')
+        # Display insights
+        ax4.text(0.5, 0.9, 'KEY INSIGHTS', fontsize=11, fontweight='bold', ha='center')
         
-        # Footer
-        fig.text(0.1, 0.02, 'Generated by AI-Powered Fund Analysis Dashboard', 
+        for i, insight in enumerate(insights):
+            ax4.text(0.05, 0.75 - i*0.12, f"• {insight}", fontsize=9, transform=ax4.transAxes)
+        
+        # === FOOTER ===
+        fig.text(0.1, 0.01, 'Generated by AI-Powered Fund Analysis Dashboard', 
                 fontsize=8, style='italic', alpha=0.7)
-        fig.text(0.5, 0.02, f'*Sharpe ratio approximation (assuming 2% risk-free rate)', 
-                fontsize=8, style='italic', alpha=0.7, ha='center')
-        fig.text(0.9, 0.02, f'Page 1 of 1', fontsize=8, alpha=0.7, ha='right')
+        fig.text(0.9, 0.01, 'Page 1 of 1', fontsize=8, alpha=0.7, ha='right')
         
-        plt.tight_layout()
-        plt.subplots_adjust(top=0.87, bottom=0.08, hspace=0.4, wspace=0.3)
+        # Save the figure
         pdf.savefig(fig, bbox_inches='tight', dpi=300)
         plt.close(fig)
     
@@ -845,4 +1004,334 @@ def main():
         """)
 
 if __name__ == "__main__":
-    main()
+    main()# Part 2: Visualization Functions and Main Application
+
+def create_visualizations(df: pd.DataFrame):
+    """Create intuitive and meaningful fund analysis visualizations"""
+    if df.empty:
+        st.warning("No data available for visualization")
+        return
+    
+    st.subheader("📊 Fund Performance Dashboard")
+    
+    # Create more intuitive tabs
+    tab1, tab2, tab3, tab4 = st.tabs(["🎯 Performance Ranking", "💰 Capital Analysis", "📈 Strategy Insights", "⚠️ Risk Assessment"])
+    
+    with tab1:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if 'return' in df.columns and not df['return'].isnull().all():
+                st.write("**🏆 Fund Performance Leaderboard**")
+                
+                # Create a more intuitive performance chart
+                fig, ax = plt.subplots(figsize=(10, 8))
+                
+                # Sort funds by performance
+                sorted_df = df.sort_values('return', ascending=True)
+                fund_names = [name[:20] + "..." if len(name) > 20 else name for name in sorted_df['fund_name']]
+                returns = sorted_df['return'].values
+                
+                # Color code: Green for positive, Red for negative, Yellow for near-zero
+                colors = []
+                for ret in returns:
+                    if ret > 0.005:  # > 0.5%
+                        colors.append('#2E8B57')  # Strong Green
+                    elif ret > 0:
+                        colors.append('#90EE90')  # Light Green
+                    elif ret > -0.005:  # > -0.5%
+                        colors.append('#FFD700')  # Yellow
+                    else:
+                        colors.append('#DC143C')  # Red
+                
+                bars = ax.barh(range(len(returns)), returns, color=colors)
+                ax.set_yticks(range(len(returns)))
+                ax.set_yticklabels(fund_names, fontsize=10)
+                ax.set_xlabel('Return (%)', fontsize=12, fontweight='bold')
+                ax.set_title('Fund Performance Ranking', fontsize=14, fontweight='bold', pad=20)
+                
+                # Add value labels
+                for i, v in enumerate(returns):
+                    label_color = 'white' if abs(v) > 0.005 else 'black'
+                    ax.text(v/2, i, f'{v:.2%}', va='center', ha='center', 
+                           fontweight='bold', color=label_color, fontsize=9)
+                
+                # Add zero line
+                ax.axvline(x=0, color='black', linestyle='--', alpha=0.5)
+                ax.grid(axis='x', alpha=0.3)
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
+        
+        with col2:
+            if 'return' in df.columns and 'strategy' in df.columns:
+                st.write("**📊 Performance by Strategy (Box Plot)**")
+                
+                fig, ax = plt.subplots(figsize=(10, 8))
+                
+                # Create strategy performance box plot
+                strategy_data = []
+                strategy_labels = []
+                
+                for strategy in df['strategy'].unique():
+                    if pd.notna(strategy):
+                        strategy_returns = df[df['strategy'] == strategy]['return'].dropna()
+                        if len(strategy_returns) > 0:
+                            strategy_data.append(strategy_returns.values)
+                            strategy_labels.append(strategy[:15])
+                
+                if strategy_data:
+                    bp = ax.boxplot(strategy_data, labels=strategy_labels, patch_artist=True)
+                    
+                    # Color the boxes
+                    colors = plt.cm.Set3(range(len(bp['boxes'])))
+                    for patch, color in zip(bp['boxes'], colors):
+                        patch.set_facecolor(color)
+                        patch.set_alpha(0.7)
+                    
+                    ax.set_ylabel('Return (%)', fontsize=12, fontweight='bold')
+                    ax.set_title('Return Distribution by Strategy', fontsize=14, fontweight='bold', pad=20)
+                    ax.tick_params(axis='x', rotation=45)
+                    ax.grid(axis='y', alpha=0.3)
+                    ax.axhline(y=0, color='red', linestyle='--', alpha=0.5)
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
+    
+    with tab2:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if 'aum' in df.columns and not df['aum'].isnull().all():
+                st.write("**💰 Capital Allocation Overview**")
+                
+                fig, ax = plt.subplots(figsize=(10, 8))
+                
+                # Create a treemap-style visualization using a pie chart with better labels
+                strategy_aum = df.groupby('strategy')['aum'].sum().sort_values(ascending=False)
+                
+                # Custom colors for better visualization
+                colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FCEA2B', '#FF9F43', '#EE5A24']
+                
+                wedges, texts, autotexts = ax.pie(strategy_aum.values, 
+                                                 labels=strategy_aum.index,
+                                                 autopct=lambda pct: f'${strategy_aum.sum()*pct/100:.0f}M\n({pct:.1f}%)',
+                                                 colors=colors[:len(strategy_aum)],
+                                                 startangle=90,
+                                                 textprops={'fontsize': 10})
+                
+                # Improve text readability
+                for autotext in autotexts:
+                    autotext.set_color('white')
+                    autotext.set_fontweight('bold')
+                    autotext.set_fontsize(9)
+                
+                ax.set_title('AUM Distribution by Strategy', fontsize=14, fontweight='bold', pad=20)
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
+        
+        with col2:
+            if 'aum' in df.columns and 'return' in df.columns:
+                st.write("**📈 Capital vs Performance Analysis**")
+                
+                fig, ax = plt.subplots(figsize=(10, 8))
+                
+                # Scatter plot of AUM vs Return with fund labels
+                scatter = ax.scatter(df['return'], df['aum'], 
+                                   s=100, alpha=0.7, 
+                                   c=range(len(df)), cmap='viridis')
+                
+                # Add fund labels
+                for i, row in df.iterrows():
+                    if pd.notna(row['return']) and pd.notna(row['aum']):
+                        label = row['fund_name'][:15] + "..." if len(row['fund_name']) > 15 else row['fund_name']
+                        ax.annotate(label, (row['return'], row['aum']), 
+                                   xytext=(5, 5), textcoords='offset points',
+                                   fontsize=8, alpha=0.8)
+                
+                ax.set_xlabel('Return (%)', fontsize=12, fontweight='bold')
+                ax.set_ylabel('AUM ($M)', fontsize=12, fontweight='bold')
+                ax.set_title('Fund Size vs Performance', fontsize=14, fontweight='bold', pad=20)
+                ax.grid(True, alpha=0.3)
+                ax.axvline(x=0, color='red', linestyle='--', alpha=0.5)
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
+    
+    with tab3:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if 'strategy' in df.columns and 'return' in df.columns:
+                st.write("**🎯 Strategy Performance Comparison**")
+                
+                fig, ax = plt.subplots(figsize=(10, 8))
+                
+                # Calculate strategy metrics
+                strategy_stats = df.groupby('strategy').agg({
+                    'return': ['mean', 'count'],
+                    'aum': 'sum'
+                }).round(4)
+                
+                strategy_stats.columns = ['Avg_Return', 'Fund_Count', 'Total_AUM']
+                strategy_stats = strategy_stats.sort_values('Avg_Return', ascending=True)
+                
+                # Create horizontal bar chart with fund count as bar width
+                colors = ['red' if x < 0 else 'lightgreen' if x < 0.005 else 'green' 
+                         for x in strategy_stats['Avg_Return']]
+                
+                bars = ax.barh(range(len(strategy_stats)), strategy_stats['Avg_Return'], 
+                              color=colors, alpha=0.8)
+                
+                ax.set_yticks(range(len(strategy_stats)))
+                ax.set_yticklabels(strategy_stats.index, fontsize=10)
+                ax.set_xlabel('Average Return (%)', fontsize=12, fontweight='bold')
+                ax.set_title('Strategy Performance Ranking', fontsize=14, fontweight='bold', pad=20)
+                
+                # Add value and fund count labels
+                for i, (ret, count) in enumerate(zip(strategy_stats['Avg_Return'], strategy_stats['Fund_Count'])):
+                    ax.text(ret + 0.001 if ret > 0 else ret - 0.001, i, 
+                           f'{ret:.2%} ({int(count)} funds)', 
+                           va='center', ha='left' if ret > 0 else 'right', fontsize=9)
+                
+                ax.axvline(x=0, color='black', linestyle='--', alpha=0.5)
+                ax.grid(axis='x', alpha=0.3)
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
+        
+        with col2:
+            if 'strategy' in df.columns:
+                st.write("**📋 Strategy Summary Table**")
+                
+                # Create comprehensive strategy summary
+                strategy_summary = df.groupby('strategy').agg({
+                    'return': ['mean', 'std', 'min', 'max', 'count'],
+                    'aum': ['sum', 'mean']
+                }).round(4)
+                
+                # Flatten column names
+                strategy_summary.columns = ['Avg Return', 'Volatility', 'Min Return', 'Max Return', 
+                                          'Funds', 'Total AUM', 'Avg Fund Size']
+                
+                # Format for display
+                display_summary = strategy_summary.copy()
+                for col in ['Avg Return', 'Volatility', 'Min Return', 'Max Return']:
+                    display_summary[col] = display_summary[col].apply(lambda x: f"{x:.2%}" if pd.notna(x) else "N/A")
+                
+                for col in ['Total AUM', 'Avg Fund Size']:
+                    display_summary[col] = display_summary[col].apply(lambda x: f"${x:.0f}M" if pd.notna(x) else "N/A")
+                
+                display_summary['Funds'] = display_summary['Funds'].astype(int)
+                
+                st.dataframe(display_summary, use_container_width=True)
+    
+    with tab4:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if 'return' in df.columns and not df['return'].isnull().all():
+                st.write("**⚠️ Risk Distribution Analysis**")
+                
+                fig, ax = plt.subplots(figsize=(10, 8))
+                
+                # Create risk buckets
+                returns_clean = df['return'].dropna()
+                
+                # Define risk categories
+                high_risk = returns_clean[abs(returns_clean) > 0.01].count()
+                medium_risk = returns_clean[(abs(returns_clean) > 0.005) & (abs(returns_clean) <= 0.01)].count()
+                low_risk = returns_clean[abs(returns_clean) <= 0.005].count()
+                
+                categories = ['Low Risk\n(±0.5%)', 'Medium Risk\n(±0.5-1%)', 'High Risk\n(>±1%)']
+                counts = [low_risk, medium_risk, high_risk]
+                colors = ['green', 'orange', 'red']
+                
+                bars = ax.bar(categories, counts, color=colors, alpha=0.7)
+                ax.set_ylabel('Number of Funds', fontsize=12, fontweight='bold')
+                ax.set_title('Risk Profile Distribution', fontsize=14, fontweight='bold', pad=20)
+                
+                # Add count labels
+                for bar, count in zip(bars, counts):
+                    ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.1,
+                           str(count), ha='center', va='bottom', fontweight='bold')
+                
+                ax.grid(axis='y', alpha=0.3)
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
+        
+        with col2:
+            if 'return' in df.columns and not df['return'].isnull().all():
+                st.write("**📊 Portfolio Risk Metrics**")
+                
+                returns_clean = df['return'].dropna()
+                
+                if len(returns_clean) > 0:
+                    # Calculate comprehensive risk metrics
+                    portfolio_return = returns_clean.mean()
+                    portfolio_vol = returns_clean.std()
+                    downside_deviation = returns_clean[returns_clean < 0].std() if len(returns_clean[returns_clean < 0]) > 0 else 0
+                    max_drawdown = returns_clean.min()
+                    upside_capture = returns_clean[returns_clean > 0].mean() if len(returns_clean[returns_clean > 0]) > 0 else 0
+                    win_rate = (returns_clean > 0).sum() / len(returns_clean)
+                    
+                    # Create metrics display
+                    metrics_data = {
+                        'Metric': ['Portfolio Return', 'Volatility', 'Downside Risk', 'Max Drawdown', 
+                                 'Win Rate', 'Best Performer', 'Worst Performer'],
+                        'Value': [
+                            f'{portfolio_return:.2%}',
+                            f'{portfolio_vol:.2%}',
+                            f'{downside_deviation:.2%}',
+                            f'{max_drawdown:.2%}',
+                            f'{win_rate:.1%}',
+                            f'{returns_clean.max():.2%}',
+                            f'{returns_clean.min():.2%}'
+                        ],
+                        'Status': [
+                            '🟢' if portfolio_return > 0 else '🔴',
+                            '🟢' if portfolio_vol < 0.01 else '🟡' if portfolio_vol < 0.02 else '🔴',
+                            '🟢' if downside_deviation < 0.01 else '🟡' if downside_deviation < 0.02 else '🔴',
+                            '🔴' if max_drawdown < -0.005 else '🟡' if max_drawdown < 0 else '🟢',
+                            '🟢' if win_rate > 0.7 else '🟡' if win_rate > 0.5 else '🔴',
+                            '🟢',
+                            '🔴' if max_drawdown < -0.005 else '🟡'
+                        ]
+                    }
+                    
+                    metrics_df = pd.DataFrame(metrics_data)
+                    st.dataframe(metrics_df, use_container_width=True, hide_index=True)
+
+def generate_executive_summary_pdf(df: pd.DataFrame) -> bytes:
+    """Generate a clean, professional executive summary PDF"""
+    from matplotlib.backends.backend_pdf import PdfPages
+    from datetime import datetime
+    
+    # Create PDF
+    pdf_buffer = BytesIO()
+    
+    with PdfPages(pdf_buffer) as pdf:
+        # Create figure with clean layout
+        fig = plt.figure(figsize=(8.27, 11.69))  # A4 size
+        fig.patch.set_facecolor('white')
+        
+        # === HEADER SECTION ===
+        fig.text(0.5, 0.95, 'FUND PERFORMANCE EXECUTIVE SUMMARY', 
+                fontsize=16, fontweight='bold', ha='center')
+        
+        # Header details
+        report_date = datetime.now().strftime('%B %d, %Y')
+        total_funds = len(df)
+        total_strategies = df["strategy"].nunique() if "strategy" in df.columns else 0
+        
+        fig.text(0.1, 0.91, f'Report Date: {report_date}', fontsize=10)
+        fig.text(0.5, 0.91, f'Portfolio: {total_funds} Funds | {total_strategies} Strategies', 
+                fontsize=10
