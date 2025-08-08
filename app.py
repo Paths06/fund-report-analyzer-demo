@@ -8,9 +8,10 @@ import PyPDF2
 import matplotlib.pyplot as plt
 import json
 import re
+import base64
+import numpy as np
 from io import BytesIO
 from typing import Dict, List, Any, Optional
-import numpy as np
 import matplotlib.backends.backend_pdf
 from datetime import datetime, timedelta
 import google.generativeai as genai
