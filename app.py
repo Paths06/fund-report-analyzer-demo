@@ -1914,51 +1914,51 @@ def main():
         # Feature cards using columns
         col1, col2 = st.columns(2)
         
-        with col1:
-            st.markdown("### 📁 Upload & Process")
-            st.info("""
-            **Multi-format Support**
+        # with col1:
+        #     st.markdown("### 📁 Upload & Process")
+        #     st.info("""
+        #     **Multi-format Support**
             
-            Support for PDF, Excel, CSV, and text files. Dashboard handles diverse document formats and complex data structures.
+        #     Support for PDF, Excel, CSV, and text files. Dashboard handles diverse document formats and complex data structures.
             
-            ✅ Multi-format document support  
-            ✅ Intelligent text extraction  
-            ✅ Error handling & fallbacks
-            """)
+        #     ✅ Multi-format document support  
+        #     ✅ Intelligent text extraction  
+        #     ✅ Error handling & fallbacks
+        #     """)
             
-            st.markdown("### 📊 Professional Insights")
-            st.success("""
-            **Advanced Analytics**
+        #     st.markdown("### 📊 Professional Insights")
+        #     st.success("""
+        #     **Advanced Analytics**
             
-            Generate comprehensive analysis with interactive visualizations and detailed performance metrics.
+        #     Generate comprehensive analysis with interactive visualizations and detailed performance metrics.
             
-            ✅ Interactive dashboards  
-            ✅ Risk analysis & metrics  
-            ✅ Strategy comparisons
-            """)
+        #     ✅ Interactive dashboards  
+        #     ✅ Risk analysis & metrics  
+        #     ✅ Strategy comparisons
+        #     """)
         
-        with col2:
-            st.markdown("### Analysis")
-            st.info("""
-            **Expert-Level Intelligence**
+        # with col2:
+        #     st.markdown("### Analysis")
+        #     st.info("""
+        #     **Expert-Level Intelligence**
             
-            Extracts fund data.
+        #     Extracts fund data.
             
-            ✅ Intelligent data extraction  
-            ✅ Strategy classification  
-            ✅ Performance standardization
-            """)
+        #     ✅ Intelligent data extraction  
+        #     ✅ Strategy classification  
+        #     ✅ Performance standardization
+        #     """)
             
-            st.markdown("### ⬇️ Export Results")
-            st.success("""
-            **Multiple Formats**
+        #     st.markdown("### ⬇️ Export Results")
+        #     st.success("""
+        #     **Multiple Formats**
             
-            Download comprehensive reports in multiple formats for presentations and further analysis.
+        #     Download comprehensive reports in multiple formats for presentations and further analysis.
             
-            ✅ Excel with multiple sheets  
-            ✅ CSV for data analysis  
-            ✅ JSON for developers
-            """)
+        #     ✅ Excel with multiple sheets  
+        #     ✅ CSV for data analysis  
+        #     ✅ JSON for developers
+        #     """)
         
         # What we extract section
         st.markdown("## 🎯 What Our Dashboard Can Extract")
