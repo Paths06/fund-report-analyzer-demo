@@ -1216,21 +1216,282 @@ def create_visualizations(df: pd.DataFrame):
                     metrics_df = pd.DataFrame(metrics_data)
                     st.dataframe(metrics_df, use_container_width=True, hide_index=True, height=280)
 
+# def create_download_links(df: pd.DataFrame):
+#     """Create enhanced download links for reports with professional styling"""
+    
+#     st.markdown("""
+#     <div class="analysis-section">
+#         <h2>⬇️ Download Professional Reports</h2>
+#         <p style="color: #90a4ae; margin-bottom: 1rem;">
+#             Export your analysis in multiple formats for further use
+#         </p>
+#     </div>
+#     """, unsafe_allow_html=True)
+    
+#     col1, col2, col3 = st.columns(3)
+    
+#     with col1:
+#         st.markdown("**📊 Excel Report**")
+#         st.markdown("Comprehensive analysis with multiple sheets")
+        
+#         output = BytesIO()
+#         with pd.ExcelWriter(output, engine='openpyxl') as writer:
+#             df.to_excel(writer, index=False, sheet_name='Fund Analysis')
+            
+#             if 'strategy' in df.columns:
+#                 summary = df.groupby('strategy').agg({
+#                     'return': ['mean', 'std', 'count'],
+#                     'aum': 'sum'
+#                 }).round(4)
+#                 summary.to_excel(writer, sheet_name='Strategy Summary')
+        
+#         excel_data = output.getvalue()
+#         b64 = base64.b64encode(excel_data).decode()
+#         href = f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}" download="fund_analysis.xlsx" style="text-decoration: none;"><button style="background: linear-gradient(135deg, #42a5f5, #2196f3); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 500; cursor: pointer; width: 100%; margin-top: 10px;">📊 Download Excel</button></a>'
+#         st.markdown(href, unsafe_allow_html=True)
+    
+#     with col2:
+#         st.markdown("**📋 CSV Data**")
+#         st.markdown("Raw data for further analysis")
+        
+#         csv_data = df.to_csv(index=False)
+#         b64 = base64.b64encode(csv_data.encode()).decode()
+#         href = f'<a href="data:text/csv;base64,{b64}" download="fund_data.csv" style="text-decoration: none;"><button style="background: linear-gradient(135deg, #66bb6a, #4caf50); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 500; cursor: pointer; width: 100%; margin-top: 10px;">📋 Download CSV</button></a>'
+#         st.markdown(href, unsafe_allow_html=True)
+    
+#     with col3:
+#         st.markdown("**🔧 JSON Data**")
+#         st.markdown("Structured data for developers")
+        
+#         json_data = df.to_json(orient='records', indent=2)
+#         b64 = base64.b64encode(json_data.encode()).decode()
+#         href = f'<a href="data:application/json;base64,{b64}" download="fund_data.json" style="text-decoration: none;"><button style="background: linear-gradient(135deg, #ab47bc, #9c27b0); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 500; cursor: pointer; width: 100%; margin-top: 10px;">🔧 Download JSON</button></a>'
+#         st.markdown(href, unsafe_allow_html=True)
+
+def generate_executive_summary_pdf(df: pd.DataFrame) -> bytes:
+    """Generate a professional multi-page executive summary PDF with proper spacing"""
+    from matplotlib.backends.backend_pdf import PdfPages
+    from datetime import datetime
+    
+    # Create PDF
+    pdf_buffer = BytesIO()
+    
+    with PdfPages(pdf_buffer) as pdf:
+        
+        # === PAGE 1: EXECUTIVE SUMMARY ===
+        fig1 = plt.figure(figsize=(8.27, 11.69))  # A4 size
+        fig1.patch.set_facecolor('#1e2329')
+        
+        # Title with proper spacing
+        fig1.text(0.5, 0.95, 'FUND PERFORMANCE EXECUTIVE SUMMARY', 
+                 fontsize=16, fontweight='bold', ha='center', color='#ffffff')
+        
+        # Header details with NO overlapping - fixed positioning
+        report_date = datetime.now().strftime('%B %d, %Y')
+        total_funds = len(df)
+        total_strategies = df["strategy"].nunique() if "strategy" in df.columns else 0
+        
+        # Row 1: Date and Portfolio info with proper spacing
+        fig1.text(0.1, 0.89, f'Report Date: {report_date}', fontsize=10, fontweight='bold', color='#e8eaed')
+        fig1.text(0.1, 0.86, f'Portfolio Overview: {total_funds} Funds across {total_strategies} Strategies', 
+                 fontsize=10, fontweight='bold', color='#e8eaed')
+        
+        # Row 2: AUM on separate line to avoid overlap
+        if 'aum' in df.columns and not df['aum'].isnull().all():
+            total_aum = df['aum'].sum()
+            fig1.text(0.1, 0.83, f'Total AUM: ${total_aum:,.0f}M', fontsize=10, fontweight='bold', color='#e8eaed')
+        
+        # Separator line with more space
+        fig1.add_artist(plt.Line2D([0.1, 0.9], [0.80, 0.80], color='#42a5f5', linewidth=1))
+        
+        # === KEY METRICS SECTION ===
+        if 'return' in df.columns and not df['return'].isnull().all():
+            fig1.text(0.1, 0.76, 'KEY PERFORMANCE METRICS', fontsize=12, fontweight='bold', color='#64b5f6')
+            
+            # Calculate metrics
+            avg_return = df['return'].mean()
+            best_return = df['return'].max()
+            worst_return = df['return'].min()
+            win_rate = (df['return'] > 0).sum() / len(df[df['return'].notna()])
+            volatility = df['return'].std()
+            
+            # Metrics in grid format with proper spacing
+            metrics_y = 0.70
+            
+            # Row 1 - Portfolio metrics
+            fig1.text(0.1, metrics_y, 'Portfolio Average Return:', fontsize=10, fontweight='bold', color='#e8eaed')
+            color = '#4caf50' if avg_return > 0 else '#f44336'
+            fig1.text(0.35, metrics_y, f'{avg_return:.2%}', fontsize=10, color=color, fontweight='bold')
+            
+            fig1.text(0.5, metrics_y, 'Best Performer:', fontsize=10, fontweight='bold', color='#e8eaed')
+            fig1.text(0.7, metrics_y, f'{best_return:.2%}', fontsize=10, color='#4caf50', fontweight='bold')
+            
+            # Row 2 - Risk metrics
+            metrics_y -= 0.035
+            fig1.text(0.1, metrics_y, 'Portfolio Volatility:', fontsize=10, fontweight='bold', color='#e8eaed')
+            vol_color = '#4caf50' if volatility < 0.01 else '#ff9800' if volatility < 0.02 else '#f44336'
+            fig1.text(0.35, metrics_y, f'{volatility:.2%}', fontsize=10, color=vol_color, fontweight='bold')
+            
+            fig1.text(0.5, metrics_y, 'Win Rate:', fontsize=10, fontweight='bold', color='#e8eaed')
+            win_color = '#4caf50' if win_rate > 0.6 else '#ff9800' if win_rate > 0.4 else '#f44336'
+            fig1.text(0.7, metrics_y, f'{win_rate:.1%}', fontsize=10, color=win_color, fontweight='bold')
+            
+            # Row 3 - Additional metrics
+            metrics_y -= 0.035
+            fig1.text(0.1, metrics_y, 'Return Range:', fontsize=10, fontweight='bold', color='#e8eaed')
+            fig1.text(0.35, metrics_y, f'{worst_return:.2%} to {best_return:.2%}', fontsize=10, color='#e8eaed')
+            
+            if 'aum' in df.columns and not df['aum'].isnull().all():
+                avg_fund_size = df['aum'].mean()
+                fig1.text(0.5, metrics_y, 'Average Fund Size:', fontsize=10, fontweight='bold', color='#e8eaed')
+                fig1.text(0.7, metrics_y, f'${avg_fund_size:.0f}M', fontsize=10, color='#e8eaed')
+        
+        # === TOP PERFORMERS TABLE ===
+        if 'return' in df.columns and not df['return'].isnull().all():
+            table_y = 0.58
+            fig1.text(0.1, table_y, 'TOP 5 PERFORMING FUNDS', fontsize=12, fontweight='bold', color='#64b5f6')
+            
+            # Get top 5 performers
+            top_performers = df.nlargest(5, 'return')[['fund_name', 'return', 'strategy', 'aum']]
+            
+            # Table headers with perfect alignment
+            header_y = table_y - 0.04
+            fig1.text(0.1, header_y, 'Fund Name', fontsize=9, fontweight='bold', color='#e8eaed')
+            fig1.text(0.45, header_y, 'Return', fontsize=9, fontweight='bold', color='#e8eaed')
+            fig1.text(0.58, header_y, 'Strategy', fontsize=9, fontweight='bold', color='#e8eaed')
+            if 'aum' in df.columns:
+                fig1.text(0.8, header_y, 'AUM ($M)', fontsize=9, fontweight='bold', color='#e8eaed')
+            
+            # Add header underline
+            fig1.add_artist(plt.Line2D([0.1, 0.9], [header_y - 0.008, header_y - 0.008], color='#404040', linewidth=0.5))
+            
+            # Table data with consistent spacing
+            for i, (_, row) in enumerate(top_performers.iterrows()):
+                y = header_y - 0.03 - (i * 0.025)
+                
+                # Fund name (truncated properly)
+                fund_name = row['fund_name'][:28] + "..." if len(row['fund_name']) > 28 else row['fund_name']
+                fig1.text(0.1, y, fund_name, fontsize=8, color='#e8eaed')
+                
+                # Return with color coding
+                ret_color = '#4caf50' if row['return'] > 0 else '#f44336'
+                fig1.text(0.45, y, f"{row['return']:.2%}", fontsize=8, color=ret_color, fontweight='bold')
+                
+                # Strategy (truncated properly)
+                strategy = str(row['strategy'])[:18] + "..." if len(str(row['strategy'])) > 18 else str(row['strategy'])
+                fig1.text(0.58, y, strategy, fontsize=8, color='#e8eaed')
+                
+                # AUM if available
+                if 'aum' in df.columns and pd.notna(row['aum']):
+                    fig1.text(0.8, y, f"${row['aum']:.0f}", fontsize=8, color='#e8eaed')
+        
+        # === STRATEGY ANALYSIS ===
+        if 'strategy' in df.columns and 'return' in df.columns:
+            strategy_y = 0.35
+            fig1.text(0.1, strategy_y, 'STRATEGY PERFORMANCE ANALYSIS', fontsize=12, fontweight='bold', color='#64b5f6')
+            
+            # Strategy summary
+            strategy_stats = df.groupby('strategy').agg({
+                'return': ['mean', 'std', 'count'],
+                'aum': 'sum'
+            }).round(4)
+            
+            strategy_stats.columns = ['Avg_Return', 'Volatility', 'Fund_Count', 'Total_AUM']
+            strategy_stats = strategy_stats.sort_values('Avg_Return', ascending=False)
+            
+            # Best and worst strategies with proper spacing
+            best_strategy = strategy_stats.index[0]
+            best_strategy_return = strategy_stats.iloc[0]['Avg_Return']
+            worst_strategy = strategy_stats.index[-1]
+            worst_strategy_return = strategy_stats.iloc[-1]['Avg_Return']
+            
+            summary_y = strategy_y - 0.04
+            fig1.text(0.1, summary_y, f'Best Performing Strategy:', fontsize=10, fontweight='bold', color='#e8eaed')
+            fig1.text(0.4, summary_y, f'{best_strategy} ({best_strategy_return:.2%})', 
+                     fontsize=10, color='#4caf50', fontweight='bold')
+            
+            summary_y -= 0.03
+            fig1.text(0.1, summary_y, f'Lowest Performing Strategy:', fontsize=10, fontweight='bold', color='#e8eaed')
+            fig1.text(0.4, summary_y, f'{worst_strategy} ({worst_strategy_return:.2%})', 
+                     fontsize=10, color='#f44336', fontweight='bold')
+            
+            # Strategy diversification
+            total_strategies = len(strategy_stats)
+            most_funds_strategy = strategy_stats.loc[strategy_stats['Fund_Count'].idxmax()]
+            
+            summary_y -= 0.03
+            fig1.text(0.1, summary_y, f'Total Investment Strategies: {total_strategies}', fontsize=10, color='#e8eaed')
+            
+            summary_y -= 0.03
+            fig1.text(0.1, summary_y, f'Most Diversified Strategy:', fontsize=10, fontweight='bold', color='#e8eaed')
+            fig1.text(0.4, summary_y, f'{most_funds_strategy.name} ({int(most_funds_strategy["Fund_Count"])} funds)', 
+                     fontsize=10, color='#e8eaed')
+        
+        # === RISK ASSESSMENT ===
+        if 'return' in df.columns and not df['return'].isnull().all():
+            risk_y = 0.15
+            fig1.text(0.1, risk_y, 'RISK ASSESSMENT', fontsize=12, fontweight='bold', color='#64b5f6')
+            
+            returns_clean = df['return'].dropna()
+            
+            # Risk metrics with proper alignment
+            downside_returns = returns_clean[returns_clean < 0]
+            upside_returns = returns_clean[returns_clean > 0]
+            
+            risk_summary_y = risk_y - 0.04
+            
+            fig1.text(0.1, risk_summary_y, f'Funds with Positive Returns:', fontsize=10, fontweight='bold', color='#e8eaed')
+            fig1.text(0.4, risk_summary_y, f'{len(upside_returns)}/{len(returns_clean)} ({len(upside_returns)/len(returns_clean):.1%})', 
+                     fontsize=10, color='#4caf50')
+            
+            if len(downside_returns) > 0:
+                avg_downside = downside_returns.mean()
+                risk_summary_y -= 0.03
+                fig1.text(0.1, risk_summary_y, f'Average Downside:', fontsize=10, fontweight='bold', color='#e8eaed')
+                fig1.text(0.4, risk_summary_y, f'{avg_downside:.2%}', fontsize=10, color='#f44336')
+            
+            if len(upside_returns) > 0:
+                avg_upside = upside_returns.mean()
+                risk_summary_y -= 0.03
+                fig1.text(0.1, risk_summary_y, f'Average Upside:', fontsize=10, fontweight='bold', color='#e8eaed')
+                fig1.text(0.4, risk_summary_y, f'{avg_upside:.2%}', fontsize=10, color='#4caf50')
+            
+            # Risk categorization
+            risk_level = "Low" if volatility < 0.005 else "Medium" if volatility < 0.015 else "High"
+            risk_color = "#4caf50" if risk_level == "Low" else "#ff9800" if risk_level == "Medium" else "#f44336"
+            risk_summary_y -= 0.03
+            fig1.text(0.1, risk_summary_y, f'Overall Portfolio Risk Level:', fontsize=10, fontweight='bold', color='#e8eaed')
+            fig1.text(0.4, risk_summary_y, risk_level, fontsize=10, color=risk_color, fontweight='bold')
+        
+        pdf.savefig(fig1, bbox_inches='tight', dpi=300, facecolor='#1e2329')
+        plt.close(fig1)
+    
+    return pdf_buffer.getvalue()
+
 def create_download_links(df: pd.DataFrame):
-    """Create enhanced download links for reports with professional styling"""
+    """Create enhanced download links for reports with professional styling including Executive Summary PDF"""
     
-    st.markdown("""
-    <div class="analysis-section">
-        <h2>⬇️ Download Professional Reports</h2>
-        <p style="color: #90a4ae; margin-bottom: 1rem;">
-            Export your analysis in multiple formats for further use
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("## ⬇️ Download Professional Reports")
+    st.markdown("Export your analysis in multiple formats for further use")
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
+        st.markdown("**📄 Executive Summary**")
+        st.markdown("Professional PDF report")
+        
+        if st.button("📄 Generate Executive Summary", use_container_width=True):
+            with st.spinner("Creating executive summary..."):
+                try:
+                    pdf_bytes = generate_executive_summary_pdf(df)
+                    b64 = base64.b64encode(pdf_bytes).decode()
+                    href = f'<a href="data:application/pdf;base64,{b64}" download="executive_summary.pdf" style="text-decoration: none;"><button style="background: linear-gradient(135deg, #e91e63, #ad1457); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 500; cursor: pointer; width: 100%; margin-top: 10px;">📄 Download Executive PDF</button></a>'
+                    st.markdown(href, unsafe_allow_html=True)
+                    st.success("Executive summary generated!")
+                except Exception as e:
+                    st.error(f"Failed to generate PDF: {e}")
+    
+    with col2:
         st.markdown("**📊 Excel Report**")
         st.markdown("Comprehensive analysis with multiple sheets")
         
@@ -1250,7 +1511,7 @@ def create_download_links(df: pd.DataFrame):
         href = f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}" download="fund_analysis.xlsx" style="text-decoration: none;"><button style="background: linear-gradient(135deg, #42a5f5, #2196f3); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 500; cursor: pointer; width: 100%; margin-top: 10px;">📊 Download Excel</button></a>'
         st.markdown(href, unsafe_allow_html=True)
     
-    with col2:
+    with col3:
         st.markdown("**📋 CSV Data**")
         st.markdown("Raw data for further analysis")
         
@@ -1259,7 +1520,7 @@ def create_download_links(df: pd.DataFrame):
         href = f'<a href="data:text/csv;base64,{b64}" download="fund_data.csv" style="text-decoration: none;"><button style="background: linear-gradient(135deg, #66bb6a, #4caf50); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 500; cursor: pointer; width: 100%; margin-top: 10px;">📋 Download CSV</button></a>'
         st.markdown(href, unsafe_allow_html=True)
     
-    with col3:
+    with col4:
         st.markdown("**🔧 JSON Data**")
         st.markdown("Structured data for developers")
         
@@ -1269,7 +1530,6 @@ def create_download_links(df: pd.DataFrame):
         st.markdown(href, unsafe_allow_html=True)
 
 # Enhanced main application with professional styling
-# Enhanced main application with professional styling - CLEAN VERSION
 def main():
     model = initialize_gemini()
     cache = get_context_cache()
