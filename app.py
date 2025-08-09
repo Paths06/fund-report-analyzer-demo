@@ -22,8 +22,8 @@ import hashlib
 
 # Dark theme configuration and styling
 st.set_page_config(
-    page_title="AI-Powered Fund Report Analysis Dashboard",
-    page_icon="🤖",
+    page_title="Fund Report Analysis Dashboard",
+    # page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -248,7 +248,7 @@ st.markdown("""
 <div style="text-align: center; margin-bottom: 2rem;">
     <h1>🤖 AI-Powered Fund Report Analysis Dashboard</h1>
     <p style="font-size: 1.1rem; color: #90a4ae; margin-top: -1rem;">
-        Professional-grade fund analysis powered by advanced AI • Extract insights from any document format
+        fund analysis Dashboard • Extract insights from any document format
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -505,19 +505,19 @@ def extract_text_content_enhanced(file_content: bytes, filename: str) -> str:
         # Enhanced status display with icons
         with st.status(f"📄 Processing {filename}...", expanded=False) as status:
             if filename_lower.endswith('.pdf'):
-                status.write("🔍 Extracting PDF content...")
+                # status.write("🔍 Extracting PDF content...")
                 text_content = extract_pdf_with_fallbacks(file_content)
             elif filename_lower.endswith(('.xlsx', '.xls')):
-                status.write("📊 Parsing Excel spreadsheet...")
+                # status.write("📊 Parsing Excel spreadsheet...")
                 text_content = extract_excel_enhanced(file_content, filename)
             elif filename_lower.endswith('.csv'):
-                status.write("📈 Reading CSV data...")
+                # status.write("📈 Reading CSV data...")
                 text_content = extract_csv_enhanced(file_content)
             elif filename_lower.endswith('.txt'):
-                status.write("📝 Reading text file...")
+                # status.write("📝 Reading text file...")
                 text_content = file_content.decode('utf-8', errors='ignore')
             else:
-                status.write("🔧 Attempting generic text extraction...")
+                # status.write("🔧 Attempting generic text extraction...")
                 try:
                     text_content = file_content.decode('utf-8', errors='ignore')
                 except:
@@ -719,7 +719,7 @@ def extract_fund_data_with_gemini_enhanced(model, text_content: str, filename: s
                 return df
                 
         except Exception as e:
-            st.error(f"❌ Enhanced AI extraction failed for {filename}: {e}")
+            st.error(f"❌ Extraction failed for {filename}: {e}")
             
             # Enhanced error information with troubleshooting tips
             with st.expander("🔧 Troubleshooting Information"):
@@ -1774,7 +1774,7 @@ def main():
         
         # Enhanced cache information
         st.markdown("### 🧠 Smart Caching")
-        st.info("💡 **AI Context Caching**: Reduces token usage and improves response times by caching analysis results.")
+        # st.info("💡 **AI Context Caching**: Reduces token usage and improves response times by caching analysis results.")
         
         # Cache management with enhanced styling
         if st.button("🗑️ Clear Analysis Cache", use_container_width=True):
@@ -1809,7 +1809,7 @@ def main():
     
     # Simple file uploader section
     st.markdown("## 📁 Upload Fund Documents")
-    st.markdown("Upload multiple files in any supported format. Our AI will intelligently extract and analyze fund performance data.")
+    st.markdown("Upload multiple files in any supported format. Intelligently extract and analyze fund performance data.")
     
     uploaded_files = st.file_uploader(
         "Choose files to analyze", 
@@ -1909,7 +1909,7 @@ def main():
     
     else:
         # Welcome section using Streamlit native components
-        st.markdown("## 🚀 Welcome to AI-Powered Fund Analysis")
+        st.markdown("## 🚀 Welcome to Fund Analysis")
         
         # Feature cards using columns
         col1, col2 = st.columns(2)
@@ -1919,7 +1919,7 @@ def main():
             st.info("""
             **Multi-format Support**
             
-            Support for PDF, Excel, CSV, and text files. Our AI handles diverse document formats and complex data structures.
+            Support for PDF, Excel, CSV, and text files. Dashboard handles diverse document formats and complex data structures.
             
             ✅ Multi-format document support  
             ✅ Intelligent text extraction  
@@ -1938,11 +1938,11 @@ def main():
             """)
         
         with col2:
-            st.markdown("### 🤖 AI Analysis")
+            st.markdown("### Analysis")
             st.info("""
             **Expert-Level Intelligence**
             
-            Advanced AI extracts fund data with 20+ years of financial analysis expertise built into the model.
+            Extracts fund data.
             
             ✅ Intelligent data extraction  
             ✅ Strategy classification  
@@ -1961,7 +1961,7 @@ def main():
             """)
         
         # What we extract section
-        st.markdown("## 🎯 What Our AI Can Extract")
+        st.markdown("## 🎯 What Our Dashboard Can Extract")
         
         col1, col2, col3, col4 = st.columns(4)
         
@@ -2001,9 +2001,7 @@ def main():
         st.markdown("---")
         st.markdown("### 🎯 Ready to Get Started?")
         st.info("""
-        **Upload your fund documents above and let our AI do the heavy lifting.**
-        
-        Built for analysts by analysts • Powered by advanced AI • Professional-grade results
+        **Upload your fund documents above.**
         """)
 
 if __name__ == "__main__":
