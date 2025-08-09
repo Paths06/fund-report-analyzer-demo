@@ -246,7 +246,7 @@ st.markdown("""
 # Enhanced title with icon and subtitle
 st.markdown("""
 <div style="text-align: center; margin-bottom: 2rem;">
-    <h1>🤖 AI-Powered Fund Report Analysis Dashboard</h1>
+    <h1>Fund Report Analysis Dashboard</h1>
     <p style="font-size: 1.1rem; color: #90a4ae; margin-top: -1rem;">
         fund analysis Dashboard • Extract insights from any document format
     </p>
