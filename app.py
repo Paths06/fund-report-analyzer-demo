@@ -1909,7 +1909,7 @@ def main():
     
     else:
         # Welcome section using Streamlit native components
-        st.markdown("## 🚀 Welcome to Fund Analysis")
+        st.markdown("## Welcome to Fund Analysis")
         
         # Feature cards using columns
         col1, col2 = st.columns(2)
@@ -1961,48 +1961,48 @@ def main():
         #     """)
         
         # What we extract section
-        st.markdown("## 🎯 What Our Dashboard Can Extract")
+        # st.markdown("## 🎯 What Our Dashboard Can Extract")
         
-        col1, col2, col3, col4 = st.columns(4)
+        # col1, col2, col3, col4 = st.columns(4)
         
-        with col1:
-            st.markdown("### 📈 Performance Data")
-            st.markdown("""
-            - Weekly, monthly, quarterly returns
-            - YTD and since inception performance
-            - Absolute and percentage returns
-            """)
+        # with col1:
+        #     st.markdown("### 📈 Performance Data")
+        #     st.markdown("""
+        #     - Weekly, monthly, quarterly returns
+        #     - YTD and since inception performance
+        #     - Absolute and percentage returns
+        #     """)
         
-        with col2:
-            st.markdown("### 💰 Fund Information")
-            st.markdown("""
-            - Assets Under Management (AUM)
-            - Net Asset Value (NAV)
-            - Fund names and identifiers
-            """)
+        # with col2:
+        #     st.markdown("### 💰 Fund Information")
+        #     st.markdown("""
+        #     - Assets Under Management (AUM)
+        #     - Net Asset Value (NAV)
+        #     - Fund names and identifiers
+        #     """)
         
-        with col3:
-            st.markdown("### 🎯 Investment Strategies")
-            st.markdown("""
-            - Long/Short Equity, Credit, Macro
-            - Event-Driven, Quantitative
-            - Multi-Strategy classifications
-            """)
+        # with col3:
+        #     st.markdown("### 🎯 Investment Strategies")
+        #     st.markdown("""
+        #     - Long/Short Equity, Credit, Macro
+        #     - Event-Driven, Quantitative
+        #     - Multi-Strategy classifications
+        #     """)
         
-        with col4:
-            st.markdown("### 📊 Additional Metrics")
-            st.markdown("""
-            - Risk metrics and volatility
-            - Sharpe ratios and drawdowns
-            - Benchmark comparisons
-            """)
+        # with col4:
+        #     st.markdown("### 📊 Additional Metrics")
+        #     st.markdown("""
+        #     - Risk metrics and volatility
+        #     - Sharpe ratios and drawdowns
+        #     - Benchmark comparisons
+        #     """)
         
-        # Call to action
-        st.markdown("---")
-        st.markdown("### 🎯 Ready to Get Started?")
-        st.info("""
-        **Upload your fund documents above.**
-        """)
+        # # Call to action
+        # st.markdown("---")
+        # st.markdown("### 🎯 Ready to Get Started?")
+        # st.info("""
+        # **Upload your fund documents above.**
+        # """)
 
 if __name__ == "__main__":
     main()
