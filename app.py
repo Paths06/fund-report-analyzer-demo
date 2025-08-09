@@ -859,15 +859,8 @@ def create_visualizations(df: pd.DataFrame):
         st.warning("📊 No data available for visualization")
         return
     
-    # Professional section header
-    st.markdown("""
-    <div class="analysis-section">
-        <h2>📊 Fund Performance Dashboard</h2>
-        <p style="color: #90a4ae; margin-bottom: 1rem;">
-            Comprehensive analysis and insights from your fund data
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("## 📊 Fund Performance Dashboard")
+    st.markdown("Comprehensive analysis and insights from your fund data")
     
     # Enhanced tabs with professional icons
     tab1, tab2, tab3, tab4 = st.tabs([
@@ -1001,12 +994,13 @@ def create_visualizations(df: pd.DataFrame):
                                                  textprops={'fontsize': 10, 'color': '#e8eaed'},
                                                  wedgeprops=dict(edgecolor='#404040', linewidth=1))
                 
-                # Enhanced text styling
+                # Enhanced text styling - FIXED VERSION
                 for autotext in autotexts:
                     autotext.set_color('#ffffff')
                     autotext.set_fontweight('bold')
                     autotext.set_fontsize(9)
-                    autotext.set_bbox(dict(boxstyle="round,pad=0.3", facecolor='rgba(0,0,0,0.7)', edgecolor='none'))
+                    # Use tuple format instead of rgba string
+                    autotext.set_bbox(dict(boxstyle="round,pad=0.3", facecolor=(0,0,0,0.7), edgecolor='none'))
                 
                 for text in texts:
                     text.set_fontweight('bold')
@@ -1032,14 +1026,14 @@ def create_visualizations(df: pd.DataFrame):
                                    c=range(len(df)), cmap='viridis',
                                    edgecolors='#404040', linewidth=1)
                 
-                # Enhanced fund labels with better positioning
+                # Enhanced fund labels with better positioning - FIXED VERSION
                 for i, row in df.iterrows():
                     if pd.notna(row['return']) and pd.notna(row['aum']):
                         label = row['fund_name'][:20] + "..." if len(row['fund_name']) > 20 else row['fund_name']
                         ax.annotate(label, (row['return'], row['aum']), 
                                    xytext=(8, 8), textcoords='offset points',
                                    fontsize=8, alpha=0.9, color='#e8eaed',
-                                   bbox=dict(boxstyle="round,pad=0.2", facecolor='rgba(0,0,0,0.7)', edgecolor='none'))
+                                   bbox=dict(boxstyle="round,pad=0.2", facecolor=(0,0,0,0.7), edgecolor='none'))
                 
                 ax.set_xlabel('Return (%)', fontsize=12, fontweight='bold', color='#e8eaed')
                 ax.set_ylabel('AUM ($M)', fontsize=12, fontweight='bold', color='#e8eaed')
@@ -1088,13 +1082,13 @@ def create_visualizations(df: pd.DataFrame):
                 ax.set_xlabel('Average Return (%)', fontsize=12, fontweight='bold', color='#e8eaed')
                 ax.set_title('Strategy Performance Ranking', fontsize=14, fontweight='bold', pad=20, color='#ffffff')
                 
-                # Enhanced value labels
+                # Enhanced value labels - FIXED VERSION
                 for i, (ret, count) in enumerate(zip(strategy_stats['Avg_Return'], strategy_stats['Fund_Count'])):
                     label_pos = ret + 0.001 if ret > 0 else ret - 0.001
                     ha = 'left' if ret > 0 else 'right'
                     ax.text(label_pos, i, f'{ret:.2%} ({int(count)} funds)', 
                            va='center', ha=ha, fontsize=10, color='#e8eaed',
-                           bbox=dict(boxstyle="round,pad=0.2", facecolor='rgba(0,0,0,0.7)', edgecolor='none'))
+                           bbox=dict(boxstyle="round,pad=0.2", facecolor=(0,0,0,0.7), edgecolor='none'))
                 
                 ax.axvline(x=0, color='#64b5f6', linestyle='--', alpha=0.8, linewidth=2)
                 ax.grid(axis='x', alpha=0.2, color='#404040')
